@@ -66,7 +66,7 @@ export function TodoItem({
       <Button
       variant="ghost"
       size="icon"
-      className="self-start text-muted-foreground hover:text-destructive"
+      className="text-muted-foreground hover:text-destructive"
       onClick={() => onDelete(todo.id)}
       disabled={disabled}
       aria-label="删除待办"

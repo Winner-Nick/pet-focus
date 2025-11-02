@@ -4,6 +4,7 @@ use tauri::State;
 use crate::{
     models::todo::Todo,
     services::todo_service,
+    webserver::WebServerStatus,
     AppState,
 };
 
@@ -53,4 +54,27 @@ pub async fn delete_todo(state: State<'_, AppState>, id: i32) -> Result<(), Stri
     todo_service::delete_todo(state.db(), id)
         .await
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub async fn start_web_server(state: State<'_, AppState>) -> Result<WebServerStatus, String> {
+    state
+        .web_server()
+        .start(state.db().clone(), state.app_handle(), None)
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub async fn stop_web_server(state: State<'_, AppState>) -> Result<WebServerStatus, String> {
+    state
+        .web_server()
+        .stop()
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub async fn web_server_status(state: State<'_, AppState>) -> Result<WebServerStatus, String> {
+    Ok(state.web_server().status().await)
 }

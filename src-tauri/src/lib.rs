@@ -3,21 +3,38 @@ mod db;
 pub mod entities;
 mod models;
 mod services;
+mod webserver;
 
 use sea_orm::DatabaseConnection;
-use tauri::Manager;
+use tauri::{AppHandle, Manager, Wry};
+
+use webserver::WebServerManager;
 
 pub struct AppState {
+    app_handle: AppHandle<Wry>,
     db: DatabaseConnection,
+    web_server: WebServerManager,
 }
 
 impl AppState {
-    pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+    pub fn new(app_handle: AppHandle<Wry>, db: DatabaseConnection) -> Self {
+        Self {
+            app_handle,
+            db,
+            web_server: WebServerManager::new(),
+        }
     }
 
     pub fn db(&self) -> &DatabaseConnection {
         &self.db
+    }
+
+    pub fn app_handle(&self) -> AppHandle<Wry> {
+        self.app_handle.clone()
+    }
+
+    pub fn web_server(&self) -> &WebServerManager {
+        &self.web_server
     }
 }
 
@@ -30,7 +47,7 @@ pub fn run() {
 
             match tauri::async_runtime::block_on(db::init_db(&handle)) {
                 Ok(db) => {
-                    app.manage(AppState::new(db));
+                    app.manage(AppState::new(handle.clone(), db));
                     Ok(())
                 }
                 Err(err) => Err(err.into()),
@@ -40,7 +57,10 @@ pub fn run() {
             commands::list_todos,
             commands::create_todo,
             commands::update_todo,
-            commands::delete_todo
+            commands::delete_todo,
+            commands::start_web_server,
+            commands::stop_web_server,
+            commands::web_server_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

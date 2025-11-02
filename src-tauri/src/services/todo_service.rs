@@ -38,6 +38,15 @@ pub async fn create_todo(db: &DatabaseConnection, title: Option<String>) -> Resu
     Ok(model.into())
 }
 
+pub async fn get_todo(db: &DatabaseConnection, id: i32) -> Result<Todo> {
+    todo::Entity::find_by_id(id)
+        .one(db)
+        .await
+        .with_context(|| format!("failed to load todo {id}"))?
+        .map(Into::into)
+        .ok_or_else(|| anyhow!("todo {id} not found"))
+}
+
 pub async fn update_todo(
     db: &DatabaseConnection,
     id: i32,
