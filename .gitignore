@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 /target/rust-analyzer
+
+# document
+.agentdocs/
+CLAUDE.md
