@@ -42,3 +42,11 @@ export async function updateTodoDueDate(
   const payload = { id, due_date: dueDate }
   return await invoke<Todo>("update_todo_due_date", { payload })
 }
+
+export async function updateTodoRemindBefore(
+  id: number,
+  remindBeforeMinutes: number,
+): Promise<Todo> {
+  const payload = { id, remind_before_minutes: remindBeforeMinutes }
+  return await invoke<Todo>("update_todo_remind_before", { payload })
+}

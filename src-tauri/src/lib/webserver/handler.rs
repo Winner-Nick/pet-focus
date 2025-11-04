@@ -75,8 +75,8 @@ async fn handle_create_todo(
         .await
         .map_err(|e| e.to_string())?;
     
-    // 通知前端数据变更
-    ctx.notify_change("created", Some(todo.id));
+    // 统一的变更通知（会自动触发 reschedule）
+    ctx.notify_change("created", Some(todo.id)).await;
     
     Ok(json!(todo))
 }
@@ -107,8 +107,8 @@ async fn handle_update_todo(
         .await
         .map_err(|e| e.to_string())?;
     
-    // 通知前端数据变更
-    ctx.notify_change("updated", Some(id));
+    // 统一的变更通知（会自动触发 reschedule）
+    ctx.notify_change("updated", Some(id)).await;
     
     Ok(json!(todo))
 }
@@ -130,8 +130,8 @@ async fn handle_delete_todo(
         .await
         .map_err(|e| e.to_string())?;
     
-    // 通知前端数据变更
-    ctx.notify_change("deleted", Some(id));
+    // 统一的变更通知（会自动触发 reschedule）
+    ctx.notify_change("deleted", Some(id)).await;
     
     Ok(json!({"success": true}))
 }

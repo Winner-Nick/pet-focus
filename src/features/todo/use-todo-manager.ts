@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 
-import { createTodo, deleteTodo, listTodos, updateTodo, updateTodoDueDate } from "@/lib/todo-api";
+import { createTodo, deleteTodo, listTodos, updateTodo, updateTodoDueDate, updateTodoRemindBefore } from "@/lib/todo-api";
 import { reportError } from "@/lib/report-error";
 import type { Todo } from "@/types/todo";
 
 type TodoSyncEvent = {
   action?: string;
   todoId?: number | null;
+  source?: "local" | "webserver";
 };
 
 export function useTodoManager() {
@@ -64,6 +65,12 @@ export function useTodoManager() {
       try {
         const unsubscribe = await listen<TodoSyncEvent>("todo-data-updated", (event) => {
           if (disposed) return;
+          
+          // 只处理来自 webserver 的事件（外部更新）
+          if (event.payload?.source !== "webserver") {
+            return;
+          }
+          
           switch (event.payload?.action) {
             case "created":
               toast.info("收到新待办 (外部)");
@@ -183,6 +190,24 @@ export function useTodoManager() {
     [sortTodos, toggleBusy],
   );
 
+  const updateRemindBefore = useCallback(
+    async (id: number, minutes: number) => {
+      toggleBusy(id, true);
+      try {
+        const updated = await updateTodoRemindBefore(id, minutes);
+        setTodos((previous) =>
+          sortTodos(previous.map((todo) => (todo.id === id ? updated : todo))),
+        );
+        toast.success("已更新提醒时间");
+      } catch (error) {
+        reportError("更新提醒时间失败", error);
+      } finally {
+        toggleBusy(id, false);
+      }
+    },
+    [sortTodos, toggleBusy],
+  );
+
   const busyIdsMemo = useMemo(() => new Set(busyTodoIds), [busyTodoIds]);
 
   return {
@@ -194,6 +219,7 @@ export function useTodoManager() {
     toggleCompleted,
     updateTitle,
     updateDueDate,
+    updateRemindBefore,
     deleteTodo: deleteTodoEntry,
   };
 }

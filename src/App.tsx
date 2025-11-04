@@ -16,6 +16,7 @@ function App() {
     toggleCompleted,
     updateTitle,
     updateDueDate,
+    updateRemindBefore,
     deleteTodo,
   } = useTodoManager();
 
@@ -51,6 +52,9 @@ function App() {
               }}
               onUpdateDueDate={(id, dueDate) => {
                 void updateDueDate(id, dueDate);
+              }}
+              onUpdateRemindBefore={(id, minutes) => {
+                void updateRemindBefore(id, minutes);
               }}
               onDelete={(id) => {
                 void deleteTodo(id);

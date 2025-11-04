@@ -94,6 +94,22 @@ async fn run_migrations(db: &DatabaseConnection) -> Result<()> {
             ))
             .await;
 
+        // 尝试添加 remind_before_minutes 字段
+        let _ = db
+            .execute(Statement::from_string(
+                backend,
+                "ALTER TABLE todos ADD COLUMN remind_before_minutes INTEGER DEFAULT 15".to_owned(),
+            ))
+            .await;
+
+        // 尝试添加 notified 字段
+        let _ = db
+            .execute(Statement::from_string(
+                backend,
+                "ALTER TABLE todos ADD COLUMN notified INTEGER DEFAULT 0".to_owned(),
+            ))
+            .await;
+
         // 为旧数据设置默认值（使用 created_at 的值）
         let _ = db
             .execute(Statement::from_string(

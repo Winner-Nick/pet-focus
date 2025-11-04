@@ -9,6 +9,8 @@ pub struct Todo {
     pub created_date: String,
     pub modified_date: String,
     pub due_date: Option<String>,
+    pub remind_before_minutes: i32,
+    pub notified: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -22,6 +24,8 @@ impl From<todo::Model> for Todo {
             created_date: model.created_date.to_rfc3339(),
             modified_date: model.modified_date.to_rfc3339(),
             due_date: model.due_date.map(|d| d.to_rfc3339()),
+            remind_before_minutes: model.remind_before_minutes,
+            notified: model.notified,
             created_at: model.created_at.to_rfc3339(),
             updated_at: model.updated_at.to_rfc3339(),
         }

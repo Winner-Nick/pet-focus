@@ -10,6 +10,7 @@ type TodoListProps = {
   onToggleCompleted: (id: number, completed: boolean) => void
   onUpdateTitle: (id: number, title: string) => void
   onUpdateDueDate: (id: number, dueDate: string | null) => void
+  onUpdateRemindBefore: (id: number, minutes: number) => void
   onDelete: (id: number) => void
 }
 
@@ -20,6 +21,7 @@ export function TodoList({
   onToggleCompleted,
   onUpdateTitle,
   onUpdateDueDate,
+  onUpdateRemindBefore,
   onDelete,
 }: TodoListProps) {
   if (isLoading) {
@@ -51,6 +53,7 @@ export function TodoList({
           onToggleCompleted={onToggleCompleted}
           onUpdateTitle={onUpdateTitle}
           onUpdateDueDate={onUpdateDueDate}
+          onUpdateRemindBefore={onUpdateRemindBefore}
           onDelete={onDelete}
         />
       ))}

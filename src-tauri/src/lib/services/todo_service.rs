@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue::{NotSet, Set}, DatabaseConnection, EntityTrait, QueryOrder};
+use sea_orm::{ActiveModelTrait, ActiveValue::{NotSet, Set}, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
 use super::super::{
     entities::todo,
@@ -31,6 +31,8 @@ pub async fn create_todo(db: &DatabaseConnection, title: Option<String>) -> Resu
         created_date: Set(now),
         modified_date: Set(now),
         due_date: Set(None),
+        remind_before_minutes: Set(15),
+        notified: Set(false),
         created_at: Set(now),
         updated_at: Set(now),
     }
@@ -109,6 +111,7 @@ pub async fn update_todo_due_date(
     };
 
     active.due_date = Set(parsed_due_date);
+    active.notified = Set(false); // 重置通知状态
     active.modified_date = Set(Utc::now());
     active.updated_at = Set(Utc::now());
 
@@ -116,6 +119,31 @@ pub async fn update_todo_due_date(
         .update(db)
         .await
         .with_context(|| format!("failed to update todo due date {id}"))?;
+
+    Ok(updated.into())
+}
+
+pub async fn update_todo_remind_before(
+    db: &DatabaseConnection,
+    id: i32,
+    remind_before_minutes: i32,
+) -> Result<Todo> {
+    let model = todo::Entity::find_by_id(id)
+        .one(db)
+        .await
+        .with_context(|| format!("failed to load todo {id}"))?
+        .ok_or_else(|| anyhow!("todo {id} not found"))?;
+
+    let mut active: todo::ActiveModel = model.into();
+
+    active.remind_before_minutes = Set(remind_before_minutes);
+    active.modified_date = Set(Utc::now());
+    active.updated_at = Set(Utc::now());
+
+    let updated = active
+        .update(db)
+        .await
+        .with_context(|| format!("failed to update todo remind before {id}"))?;
 
     Ok(updated.into())
 }
@@ -129,6 +157,41 @@ pub async fn delete_todo(db: &DatabaseConnection, id: i32) -> Result<()> {
     if result.rows_affected == 0 {
         return Err(anyhow!("todo {id} not found"));
     }
+
+    Ok(())
+}
+
+pub async fn get_next_due_todo(db: &DatabaseConnection) -> Result<Option<todo::Model>> {
+    let now = Utc::now();
+    
+    let todo = todo::Entity::find()
+        .filter(todo::Column::Completed.eq(false))
+        .filter(todo::Column::DueDate.is_not_null())
+        .filter(todo::Column::DueDate.gt(now))
+        .filter(todo::Column::Notified.eq(false)) // 只选择未通知的 todo
+        .order_by_asc(todo::Column::DueDate)
+        .one(db)
+        .await
+        .context("failed to query next due todo")?;
+
+    Ok(todo)
+}
+
+/// 标记 todo 为已通知
+pub async fn mark_todo_notified(db: &DatabaseConnection, id: i32) -> Result<()> {
+    let model = todo::Entity::find_by_id(id)
+        .one(db)
+        .await
+        .with_context(|| format!("failed to load todo {id}"))?
+        .ok_or_else(|| anyhow!("todo {id} not found"))?;
+
+    let mut active: todo::ActiveModel = model.into();
+    active.notified = Set(true);
+
+    active
+        .update(db)
+        .await
+        .with_context(|| format!("failed to mark todo {id} as notified"))?;
 
     Ok(())
 }

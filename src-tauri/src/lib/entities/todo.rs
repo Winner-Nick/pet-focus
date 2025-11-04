@@ -11,6 +11,10 @@ pub struct Model {
     pub created_date: DateTimeUtc,
     pub modified_date: DateTimeUtc,
     pub due_date: Option<DateTimeUtc>,
+    #[sea_orm(default_value = 15)]
+    pub remind_before_minutes: i32,
+    #[sea_orm(default_value = false)]
+    pub notified: bool,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }

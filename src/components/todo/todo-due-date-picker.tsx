@@ -16,12 +16,20 @@ import { cn } from "@/lib/utils";
 interface TodoDueDatePickerProps {
   value: string | null;
   onChange: (value: string | null) => void;
+  remindBeforeMinutes?: number;
+  onRemindBeforeChange?: (minutes: number) => void;
+  isNotified?: boolean;
+  isCompleted?: boolean;
   disabled?: boolean;
 }
 
 export function TodoDueDatePicker({
   value,
   onChange,
+  remindBeforeMinutes = 15,
+  onRemindBeforeChange,
+  isNotified = false,
+  isCompleted = false,
   disabled = false,
 }: TodoDueDatePickerProps) {
   const [open, setOpen] = React.useState(false);
@@ -31,6 +39,7 @@ export function TodoDueDatePicker({
   const [tempTime, setTempTime] = React.useState<string>(
     value ? new Date(value).toTimeString().slice(0, 5) : "23:59"
   );
+  const [tempRemindBefore, setTempRemindBefore] = React.useState<number>(remindBeforeMinutes);
 
   // 当外部 value 改变时更新临时状态
   React.useEffect(() => {
@@ -44,6 +53,11 @@ export function TodoDueDatePicker({
     }
   }, [value]);
 
+  // 当外部 remindBeforeMinutes 改变时更新临时状态
+  React.useEffect(() => {
+    setTempRemindBefore(remindBeforeMinutes);
+  }, [remindBeforeMinutes]);
+
   // 打开时重置临时状态为当前值
   const handleOpenChange = (isOpen: boolean) => {
     if (isOpen) {
@@ -55,6 +69,7 @@ export function TodoDueDatePicker({
         setTempDate(undefined);
         setTempTime("23:59");
       }
+      setTempRemindBefore(remindBeforeMinutes);
     }
     setOpen(isOpen);
   };
@@ -76,6 +91,12 @@ export function TodoDueDatePicker({
     } else {
       onChange(null);
     }
+    
+    // 更新提醒时间（如果有变化且提供了回调）
+    if (onRemindBeforeChange && tempRemindBefore !== remindBeforeMinutes) {
+      onRemindBeforeChange(tempRemindBefore);
+    }
+    
     setOpen(false);
   };
 
@@ -102,7 +123,10 @@ export function TodoDueDatePicker({
   return (
     <div className="flex items-center gap-2">
       {value && (
-        <span className="text-sm text-muted-foreground">
+        <span className={cn(
+          "text-sm",
+          isNotified && !isCompleted ? "text-destructive font-medium" : "text-muted-foreground"
+        )}>
           到期: {formatDateTime(value)}
         </span>
       )}
@@ -113,7 +137,8 @@ export function TodoDueDatePicker({
         onClick={() => setOpen(true)}
         className={cn(
           "size-8 text-muted-foreground hover:text-foreground",
-          value && "text-primary hover:text-primary"
+          value && !isNotified && "text-primary hover:text-primary",
+          value && isNotified && !isCompleted && "text-destructive hover:text-destructive"
         )}
         aria-label="设置到期日期"
       >
@@ -150,6 +175,24 @@ export function TodoDueDatePicker({
                 className="h-9"
               />
             </div>
+            {tempDate && (
+              <div className="space-y-2">
+                <Label htmlFor="remind-before" className="text-sm">
+                  提前提醒（分钟）
+                </Label>
+                <Input
+                  type="number"
+                  id="remind-before"
+                  min={0}
+                  max={1440}
+                  step={1}
+                  value={tempRemindBefore}
+                  onChange={(e) => setTempRemindBefore(parseInt(e.target.value) || 0)}
+                  className="h-9"
+                  placeholder="15"
+                />
+              </div>
+            )}
             <div className="flex justify-center">
               <Calendar
                 mode="single"

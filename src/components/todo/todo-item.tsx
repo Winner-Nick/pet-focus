@@ -14,6 +14,7 @@ type TodoItemProps = {
   onToggleCompleted: (id: number, completed: boolean) => void
   onUpdateTitle: (id: number, title: string) => void
   onUpdateDueDate: (id: number, dueDate: string | null) => void
+  onUpdateRemindBefore: (id: number, minutes: number) => void
   onDelete: (id: number) => void
 }
 
@@ -23,6 +24,7 @@ export function TodoItem({
   onToggleCompleted,
   onUpdateTitle,
   onUpdateDueDate,
+  onUpdateRemindBefore,
   onDelete,
 }: TodoItemProps) {
   const [draftTitle, setDraftTitle] = useState(todo.title)
@@ -44,6 +46,10 @@ export function TodoItem({
 
   const handleDueDateChange = (dueDate: string | null) => {
     onUpdateDueDate(todo.id, dueDate)
+  }
+
+  const handleRemindBeforeChange = (minutes: number) => {
+    onUpdateRemindBefore(todo.id, minutes)
   }
 
   return (
@@ -86,6 +92,10 @@ export function TodoItem({
         <TodoDueDatePicker
           value={todo.due_date}
           onChange={handleDueDateChange}
+          remindBeforeMinutes={todo.remind_before_minutes}
+          onRemindBeforeChange={handleRemindBeforeChange}
+          isNotified={todo.notified}
+          isCompleted={todo.completed}
           disabled={disabled}
         />
       </div>

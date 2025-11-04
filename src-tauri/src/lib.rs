@@ -15,7 +15,7 @@ mod lib {
 pub use lib::entities;
 
 use sea_orm::DatabaseConnection;
-use tauri::{AppHandle, Manager, Wry};
+use tauri::{AppHandle, Emitter, Manager, Wry};
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use lib::webserver::WebServerManager;
@@ -48,6 +48,28 @@ impl AppState {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn web_server(&self) -> &WebServerManager {
         &self.web_server
+    }
+
+    /// 统一的 todo 变更通知方法
+    /// 当任何 todo 数据发生变化时调用此方法，会：
+    /// 1. 发送事件给前端
+    /// 2. 触发调度器重新调度
+    pub async fn notify_todo_change(&self, action: &'static str, todo_id: Option<i32>) {
+        // 通知前端（标记为来自本地命令）
+        if let Err(err) = self.app_handle.emit(
+            "todo-data-updated",
+            serde_json::json!({ 
+                "action": action, 
+                "todoId": todo_id,
+                "source": "local"
+            }),
+        ) {
+            eprintln!("Failed to emit todo change event: {err}");
+        }
+
+        // 触发调度器重新调度
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        self.web_server.reschedule_notifications().await;
     }
 }
 
@@ -129,6 +151,7 @@ pub fn run() {
             lib::commands::update_todo,
             lib::commands::delete_todo,
             lib::commands::update_todo_due_date,
+            lib::commands::update_todo_remind_before,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             lib::commands::start_web_server,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
