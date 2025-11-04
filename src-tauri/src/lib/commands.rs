@@ -4,8 +4,9 @@ use tauri::State;
 use super::{
     models::todo::Todo,
     services::todo_service,
-    webserver::WebServerStatus,
 };
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use super::webserver::WebServerStatus;
 use crate::AppState;
 
 #[derive(Debug, Default, Deserialize)]
@@ -56,6 +57,7 @@ pub async fn delete_todo(state: State<'_, AppState>, id: i32) -> Result<(), Stri
         .map_err(|err| err.to_string())
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 pub async fn start_web_server(state: State<'_, AppState>) -> Result<WebServerStatus, String> {
     state
@@ -65,6 +67,7 @@ pub async fn start_web_server(state: State<'_, AppState>) -> Result<WebServerSta
         .map_err(|err| err.to_string())
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 pub async fn stop_web_server(state: State<'_, AppState>) -> Result<WebServerStatus, String> {
     state
@@ -74,6 +77,7 @@ pub async fn stop_web_server(state: State<'_, AppState>) -> Result<WebServerStat
         .map_err(|err| err.to_string())
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 pub async fn web_server_status(state: State<'_, AppState>) -> Result<WebServerStatus, String> {
     Ok(state.web_server().status().await)

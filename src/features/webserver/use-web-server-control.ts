@@ -27,14 +27,22 @@ function resolveAddress(status: WebServerStatus | null): string | undefined {
 export function useWebServerControl() {
   const [serverStatus, setServerStatus] = useState<WebServerStatus | null>(null);
   const [isServerBusy, setIsServerBusy] = useState(false);
+  const [isPlatformSupported, setIsPlatformSupported] = useState(true);
 
   const refreshServerStatus = useCallback(async () => {
     setIsServerBusy(true);
     try {
       const status = await getWebServerStatus();
       setServerStatus(status);
+      setIsPlatformSupported(true);
     } catch (error) {
-      reportError("获取外部 API 状态失败", error);
+      // 检查是否是平台不支持的错误
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("not found") || errorMessage.includes("not implemented")) {
+        setIsPlatformSupported(false);
+      } else {
+        reportError("获取外部 API 状态失败", error);
+      }
     } finally {
       setIsServerBusy(false);
     }
@@ -70,6 +78,10 @@ export function useWebServerControl() {
   const apiDisplayAddress = useMemo(() => resolveAddress(serverStatus), [serverStatus]);
 
   const statusMessage = useMemo(() => {
+    if (!isPlatformSupported) {
+      return "该平台不支持";
+    }
+
     if (isServerRunning) {
       return apiDisplayAddress ? `服务运行中：${apiDisplayAddress}` : "服务运行中";
     }
@@ -83,11 +95,12 @@ export function useWebServerControl() {
     }
 
     return "尚未获取服务状态";
-  }, [apiDisplayAddress, isServerBusy, isServerRunning, serverStatus]);
+  }, [apiDisplayAddress, isServerBusy, isServerRunning, serverStatus, isPlatformSupported]);
 
   return {
     isServerRunning,
     isServerBusy,
+    isPlatformSupported,
     statusMessage,
     toggleApi: handleToggleApi,
   };

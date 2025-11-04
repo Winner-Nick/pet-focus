@@ -10,6 +10,7 @@ type TodoHeaderProps = {
   onCreateTodo: () => void;
   isServerRunning: boolean;
   isServerBusy: boolean;
+  isPlatformSupported: boolean;
   statusMessage: string;
   onToggleApi: (nextEnabled: boolean) => void;
 };
@@ -19,6 +20,7 @@ export function TodoHeader({
   onCreateTodo,
   isServerRunning,
   isServerBusy,
+  isPlatformSupported,
   statusMessage,
   onToggleApi,
 }: TodoHeaderProps) {
@@ -32,6 +34,7 @@ export function TodoHeader({
         <ExternalApiToggle
           isRunning={isServerRunning}
           isBusy={isServerBusy}
+          isPlatformSupported={isPlatformSupported}
           statusMessage={statusMessage}
           onToggle={onToggleApi}
         />

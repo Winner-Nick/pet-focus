@@ -4,20 +4,23 @@ import { Loader2 } from "lucide-react";
 type ExternalApiToggleProps = {
   isRunning: boolean;
   isBusy: boolean;
+  isPlatformSupported: boolean;
   statusMessage: string;
   onToggle: (nextEnabled: boolean) => void;
 };
 
-export function ExternalApiToggle({ isRunning, isBusy, statusMessage, onToggle }: ExternalApiToggleProps) {
+export function ExternalApiToggle({ isRunning, isBusy, isPlatformSupported, statusMessage, onToggle }: ExternalApiToggleProps) {
+  const isDisabled = isBusy || !isPlatformSupported;
+
   return (
     <div className="flex items-start gap-3">
       <div className="mt-1">
         <Checkbox
           id="external-api-toggle"
           checked={isRunning}
-          disabled={isBusy}
+          disabled={isDisabled}
           onCheckedChange={(checked) => {
-            if (isBusy) return;
+            if (isDisabled) return;
             const nextEnabled = checked === true;
             if (nextEnabled === isRunning) return;
             onToggle(nextEnabled);

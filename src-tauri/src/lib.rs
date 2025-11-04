@@ -7,6 +7,7 @@ mod lib {
     pub mod services;
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub mod tray;
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub mod webserver;
 }
 
@@ -16,11 +17,13 @@ pub use lib::entities;
 use sea_orm::DatabaseConnection;
 use tauri::{AppHandle, Manager, Wry};
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use lib::webserver::WebServerManager;
 
 pub struct AppState {
     app_handle: AppHandle<Wry>,
     db: DatabaseConnection,
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     web_server: WebServerManager,
 }
 
@@ -29,6 +32,7 @@ impl AppState {
         Self {
             app_handle,
             db,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             web_server: WebServerManager::new(),
         }
     }
@@ -41,6 +45,7 @@ impl AppState {
         self.app_handle.clone()
     }
 
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn web_server(&self) -> &WebServerManager {
         &self.web_server
     }
@@ -90,8 +95,11 @@ pub fn run() {
             lib::commands::create_todo,
             lib::commands::update_todo,
             lib::commands::delete_todo,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             lib::commands::start_web_server,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             lib::commands::stop_web_server,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             lib::commands::web_server_status
         ])
         .run(tauri::generate_context!())

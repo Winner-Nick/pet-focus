@@ -18,7 +18,7 @@ function App() {
     deleteTodo,
   } = useTodoManager();
 
-  const { isServerRunning, isServerBusy, statusMessage, toggleApi } = useWebServerControl();
+  const { isServerRunning, isServerBusy, isPlatformSupported, statusMessage, toggleApi } = useWebServerControl();
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,6 +31,7 @@ function App() {
             }}
             isServerRunning={isServerRunning}
             isServerBusy={isServerBusy}
+            isPlatformSupported={isPlatformSupported}
             statusMessage={statusMessage}
             onToggleApi={(nextEnabled) => {
               void toggleApi(nextEnabled);
