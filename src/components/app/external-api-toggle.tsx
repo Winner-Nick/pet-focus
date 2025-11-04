@@ -25,12 +25,12 @@ export function ExternalApiToggle({ isRunning, isBusy, isPlatformSupported, stat
             if (nextEnabled === isRunning) return;
             onToggle(nextEnabled);
           }}
-          aria-label="切换外部 REST API"
+          aria-label="Toggle Websocket API"
         />
       </div>
       <div>
         <label htmlFor="external-api-toggle" className="text-sm font-medium leading-none">
-          外部 REST API
+          Toggle Websocket API
         </label>
         <p className="mt-1 text-xs text-muted-foreground">{statusMessage}</p>
       </div>
