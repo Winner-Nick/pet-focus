@@ -153,8 +153,7 @@ pub fn run() {
             lib::commands::create_todo,
             lib::commands::update_todo,
             lib::commands::delete_todo,
-            lib::commands::update_todo_due_date,
-            lib::commands::update_todo_remind_before,
+            lib::commands::update_todo_details,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             lib::commands::start_web_server,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 
-import { createTodo, deleteTodo, listTodos, updateTodo, updateTodoDueDate, updateTodoRemindBefore } from "@/lib/todo-api";
+import { createTodo, deleteTodo, listTodos, updateTodo, updateTodoDetails, type TodoDetailUpdate } from "@/lib/todo-api";
 import { reportError } from "@/lib/report-error";
 import type { Todo } from "@/types/todo";
 
@@ -172,35 +172,18 @@ export function useTodoManager() {
     [toggleBusy],
   );
 
-  const updateDueDate = useCallback(
-    async (id: number, dueDate: string | null) => {
+  const updateDetails = useCallback(
+    async (id: number, details: TodoDetailUpdate) => {
       toggleBusy(id, true);
       try {
-        const updated = await updateTodoDueDate(id, dueDate);
+        const updated = await updateTodoDetails(id, details);
         setTodos((previous) =>
           sortTodos(previous.map((todo) => (todo.id === id ? updated : todo))),
         );
-        toast.success(dueDate ? "已设置到期日期" : "已清除到期日期");
+        toast.success("已更新待办详情");
       } catch (error) {
-        reportError("更新到期日期失败", error);
-      } finally {
-        toggleBusy(id, false);
-      }
-    },
-    [sortTodos, toggleBusy],
-  );
-
-  const updateRemindBefore = useCallback(
-    async (id: number, minutes: number) => {
-      toggleBusy(id, true);
-      try {
-        const updated = await updateTodoRemindBefore(id, minutes);
-        setTodos((previous) =>
-          sortTodos(previous.map((todo) => (todo.id === id ? updated : todo))),
-        );
-        toast.success("已更新提醒时间");
-      } catch (error) {
-        reportError("更新提醒时间失败", error);
+        reportError("更新待办详情失败", error);
+        throw error;
       } finally {
         toggleBusy(id, false);
       }
@@ -218,8 +201,7 @@ export function useTodoManager() {
     createTodo: createTodoEntry,
     toggleCompleted,
     updateTitle,
-    updateDueDate,
-    updateRemindBefore,
+    updateDetails,
     deleteTodo: deleteTodoEntry,
   };
 }

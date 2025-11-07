@@ -50,9 +50,33 @@
     "status": "success",
     "data": {
       "id": 1,
+      "uid": "f5c5f2af-390f-4ba7-a7f4-1b19ec472b34",
       "title": "新待办事项",
+      "description": null,
       "completed": false,
-      "created_at": "2024-01-01T00:00:00Z"
+      "status": "NEEDS-ACTION",
+      "percent_complete": 0,
+      "priority": null,
+      "location": null,
+      "tags": [],
+      "start_at": "2024-01-02T08:00:00Z",
+      "last_modified_at": "2024-01-02T08:00:00Z",
+      "due_date": null,
+      "recurrence_rule": null,
+      "reminder_offset_minutes": 15,
+      "reminder_method": "display",
+      "timezone": null,
+      "reminder_last_triggered_at": null,
+      "completed_at": null,
+      "notified": false,
+      "dirty": true,
+      "remote_url": null,
+      "remote_etag": null,
+      "remote_calendar_url": null,
+      "sync_token": null,
+      "last_synced_at": null,
+      "created_at": "2024-01-02T08:00:00Z",
+      "updated_at": "2024-01-02T08:00:00Z"
     }
   }
 }
@@ -148,9 +172,33 @@
     "data": [
       {
         "id": 1,
+        "uid": "550e8400-e29b-41d4-a716-446655440000",
         "title": "待办1",
+        "description": null,
         "completed": false,
-        "created_at": "2024-01-01T00:00:00Z"
+        "status": "NEEDS-ACTION",
+        "percent_complete": 0,
+        "priority": null,
+        "location": null,
+        "tags": [],
+        "start_at": "2024-01-01T08:00:00Z",
+        "last_modified_at": "2024-01-01T08:00:00Z",
+        "due_date": null,
+        "recurrence_rule": null,
+        "reminder_offset_minutes": 15,
+        "reminder_method": "display",
+        "timezone": null,
+        "reminder_last_triggered_at": null,
+        "completed_at": null,
+        "notified": false,
+        "dirty": false,
+        "remote_url": null,
+        "remote_etag": null,
+        "remote_calendar_url": null,
+        "sync_token": null,
+        "last_synced_at": null,
+        "created_at": "2024-01-01T08:00:00Z",
+        "updated_at": "2024-01-01T08:00:00Z"
       }
     ]
   }
@@ -185,9 +233,33 @@
     "status": "success",
     "data": {
       "id": 1,
+      "uid": "550e8400-e29b-41d4-a716-446655440000",
       "title": "待办1",
+      "description": null,
       "completed": false,
-      "created_at": "2024-01-01T00:00:00Z"
+      "status": "NEEDS-ACTION",
+      "percent_complete": 0,
+      "priority": null,
+      "location": null,
+      "tags": [],
+      "start_at": "2024-01-01T08:00:00Z",
+      "last_modified_at": "2024-01-01T08:00:00Z",
+      "due_date": null,
+      "recurrence_rule": null,
+      "reminder_offset_minutes": 15,
+      "reminder_method": "display",
+      "timezone": null,
+      "reminder_last_triggered_at": null,
+      "completed_at": null,
+      "notified": false,
+      "dirty": false,
+      "remote_url": null,
+      "remote_etag": null,
+      "remote_calendar_url": null,
+      "sync_token": null,
+      "last_synced_at": null,
+      "created_at": "2024-01-01T08:00:00Z",
+      "updated_at": "2024-01-01T08:00:00Z"
     }
   }
 }
@@ -221,9 +293,33 @@
     "status": "success",
     "data": {
       "id": 2,
+      "uid": "f5c5f2af-390f-4ba7-a7f4-1b19ec472b34",
       "title": "新待办",
+      "description": null,
       "completed": false,
-      "created_at": "2024-01-01T00:00:00Z"
+      "status": "NEEDS-ACTION",
+      "percent_complete": 0,
+      "priority": null,
+      "location": null,
+      "tags": [],
+      "start_at": "2024-01-02T08:00:00Z",
+      "last_modified_at": "2024-01-02T08:00:00Z",
+      "due_date": null,
+      "recurrence_rule": null,
+      "reminder_offset_minutes": 15,
+      "reminder_method": "display",
+      "timezone": null,
+      "reminder_last_triggered_at": null,
+      "completed_at": null,
+      "notified": false,
+      "dirty": true,
+      "remote_url": null,
+      "remote_etag": null,
+      "remote_calendar_url": null,
+      "sync_token": null,
+      "last_synced_at": null,
+      "created_at": "2024-01-02T08:00:00Z",
+      "updated_at": "2024-01-02T08:00:00Z"
     }
   }
 }
@@ -259,9 +355,106 @@
     "status": "success",
     "data": {
       "id": 1,
+      "uid": "550e8400-e29b-41d4-a716-446655440000",
       "title": "更新的标题",
+      "description": null,
       "completed": true,
-      "created_at": "2024-01-01T00:00:00Z"
+      "status": "COMPLETED",
+      "percent_complete": 100,
+      "priority": null,
+      "location": null,
+      "tags": [],
+      "start_at": "2024-01-01T08:00:00Z",
+      "last_modified_at": "2024-01-03T09:30:00Z",
+      "due_date": null,
+      "recurrence_rule": null,
+  "reminder_offset_minutes": 15,
+  "reminder_method": "display",
+      "timezone": null,
+      "reminder_last_triggered_at": null,
+      "completed_at": "2024-01-03T09:30:00Z",
+  "notified": false,
+      "dirty": true,
+      "remote_url": null,
+      "remote_etag": null,
+      "remote_calendar_url": null,
+      "sync_token": null,
+      "last_synced_at": null,
+      "created_at": "2024-01-01T08:00:00Z",
+      "updated_at": "2024-01-03T09:30:00Z"
+    }
+  }
+}
+```
+
+### update_todo_details
+
+批量更新待办的详情信息，包括 CalDAV 对齐的字段（描述、状态、优先级、时间范围、提醒等）。所有字段都是可选的，未提供的字段会保持不变。
+
+**请求**:
+```json
+{
+  "type": "call",
+  "body": {
+    "id": "3a",
+    "method": "update_todo_details",
+    "params": {
+      "id": 1,
+      "title": "整理 CalDAV 对齐",
+      "description": "梳理字段映射与同步流程",
+      "status": "IN-PROCESS",
+      "percent_complete": 40,
+      "priority": 5,
+      "location": "Home",
+      "tags": ["caldav", "sync"],
+      "start_at": "2024-01-04T02:00:00Z",
+      "due_date": "2024-01-04T04:00:00Z",
+      "recurrence_rule": "FREQ=DAILY;INTERVAL=1",
+      "timezone": "Asia/Shanghai",
+      "reminder_offset_minutes": 30,
+      "reminder_method": "display"
+    }
+  }
+}
+```
+
+**响应**:
+```json
+{
+  "type": "reply",
+  "body": {
+    "id": "3a",
+    "method": "update_todo_details",
+    "status": "success",
+    "data": {
+      "id": 1,
+      "uid": "550e8400-e29b-41d4-a716-446655440000",
+      "title": "整理 CalDAV 对齐",
+      "description": "梳理字段映射与同步流程",
+      "completed": false,
+      "status": "IN-PROCESS",
+      "percent_complete": 40,
+      "priority": 5,
+      "location": "Home",
+      "tags": ["caldav", "sync"],
+      "start_at": "2024-01-04T02:00:00Z",
+      "last_modified_at": "2024-01-04T01:10:00Z",
+      "due_date": "2024-01-04T04:00:00Z",
+      "recurrence_rule": "FREQ=DAILY;INTERVAL=1",
+      "reminder_offset_minutes": 30,
+      "reminder_method": "display",
+      "timezone": "Asia/Shanghai",
+      "reminder_last_triggered_at": null,
+      "completed_at": null,
+      "notified": false,
+      "dirty": true,
+      "remote_url": null,
+      "remote_etag": null,
+      "remote_calendar_url": null,
+      "sync_token": null,
+      "last_synced_at": null,
+      "created_at": "2024-01-01T08:00:00Z",
+      "updated_at": "2024-01-04T01:10:00Z"
     }
   }
 }
@@ -414,8 +607,8 @@
 - `timestamp`: 通知发送时间（ISO 8601 格式）
 
 **工作原理**:
-1. 每个待办事项可以设置 `due_date`（到期时间）和 `remind_before_minutes`（提前提醒分钟数，默认 15 分钟）
-2. 调度器会自动计算提醒时间：`remind_at = due_date - remind_before_minutes`
+1. 每个待办事项可以设置 `due_date`（到期时间）和 `reminder_offset_minutes`（提前提醒分钟数，默认 15 分钟）
+2. 调度器会自动计算提醒时间：`remind_at = due_date - reminder_offset_minutes`
 3. 当到达提醒时间时，服务器会向所有订阅了 `due_notification` 频道的客户端推送通知
 4. 每个待办事项只会发送一次通知（通过 `notified` 字段标记）
 5. 如果用户修改了待办事项的 `due_date`，`notified` 字段会重置为 `false`，允许再次发送通知

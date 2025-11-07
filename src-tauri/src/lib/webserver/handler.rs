@@ -6,7 +6,7 @@ use super::{
     context::ApiContext,
     message::{CallBody, WsMessage},
 };
-use crate::lib::services::todo_service;
+use crate::lib::services::todo;
 use crate::lib::window;
 
 /// 处理 Call 请求
@@ -20,11 +20,12 @@ pub async fn handle_call(
     let CallBody { id, method, params } = call;
 
     let result = match method.as_str() {
-        "list_todos" => handle_list_todos(db).await,
-        "get_todo" => handle_get_todo(db, params).await,
-        "create_todo" => handle_create_todo(db, params, ctx).await,
-        "update_todo" => handle_update_todo(db, params, ctx).await,
-        "delete_todo" => handle_delete_todo(db, params, ctx).await,
+    "list_todos" => handle_list_todos(db).await,
+    "get_todo" => handle_get_todo(db, params).await,
+    "create_todo" => handle_create_todo(db, params, ctx).await,
+    "update_todo" => handle_update_todo(db, params, ctx).await,
+    "delete_todo" => handle_delete_todo(db, params, ctx).await,
+    "update_todo_details" => handle_update_todo_details(db, params, ctx).await,
         "wake_window" => handle_wake_window(ctx).await,
         _ => Err(format!("Unknown method: {}", method)),
     };
@@ -41,7 +42,7 @@ pub async fn handle_call(
 
 /// 列出所有待办
 async fn handle_list_todos(db: &DatabaseConnection) -> Result<Value, String> {
-    let todos = todo_service::list_todos(db)
+    let todos = todo::list_todos(db)
         .await
         .map_err(|e| e.to_string())?;
     
@@ -57,7 +58,7 @@ async fn handle_get_todo(db: &DatabaseConnection, params: Option<Value>) -> Resu
         .and_then(|v| v.as_i64())
         .ok_or("Missing or invalid id")? as i32;
 
-    let todo = todo_service::get_todo(db, id)
+    let todo = todo::get_todo(db, id)
         .await
         .map_err(|e| e.to_string())?;
     
@@ -73,7 +74,7 @@ async fn handle_create_todo(
     let title = params
         .and_then(|p| p.get("title").and_then(|t| t.as_str()).map(String::from));
 
-    let todo = todo_service::create_todo(db, title)
+    let todo = todo::create_todo(db, title)
         .await
         .map_err(|e| e.to_string())?;
     
@@ -105,7 +106,7 @@ async fn handle_update_todo(
         .get("completed")
         .and_then(|v| v.as_bool());
 
-    let todo = todo_service::update_todo(db, id, title, completed)
+    let todo = todo::update_todo(db, id, title, completed)
         .await
         .map_err(|e| e.to_string())?;
     
@@ -128,7 +129,7 @@ async fn handle_delete_todo(
         .and_then(|v| v.as_i64())
         .ok_or("Missing or invalid id")? as i32;
 
-    todo_service::delete_todo(db, id)
+    todo::delete_todo(db, id)
         .await
         .map_err(|e| e.to_string())?;
     
@@ -136,6 +137,102 @@ async fn handle_delete_todo(
     ctx.notify_change("deleted", Some(id)).await;
     
     Ok(json!({"success": true}))
+}
+
+/// 更新待办详情
+async fn handle_update_todo_details(
+    db: &DatabaseConnection,
+    params: Option<Value>,
+    ctx: &ApiContext,
+) -> Result<Value, String> {
+    let params = params.ok_or("Missing params")?;
+
+    let id = params
+        .get("id")
+        .and_then(|v| v.as_i64())
+        .ok_or("Missing or invalid id")? as i32;
+
+    let description = params
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let priority = params
+        .get("priority")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+
+    let location = params
+        .get("location")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let tags = match params.get("tags") {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|value| value.as_str().map(|s| s.to_string()))
+            .collect(),
+        Some(Value::String(text)) => text
+            .split(',')
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .map(|item| item.to_string())
+            .collect(),
+        Some(Value::Null) | None => Vec::new(),
+        _ => return Err("Invalid tags format".into()),
+    };
+
+    let start_at = params
+        .get("start_at")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let due_date = match params.get("due_date") {
+        Some(Value::String(text)) => Some(text.clone()),
+        Some(Value::Null) | None => None,
+        _ => return Err("Invalid due_date format".into()),
+    };
+
+    let recurrence_rule = params
+        .get("recurrence_rule")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let reminder_offset_minutes = params
+        .get("reminder_offset_minutes")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+
+    let reminder_method = params
+        .get("reminder_method")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let timezone = params
+        .get("timezone")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let todo = todo::update_todo_details(
+        db,
+        id,
+        description,
+        priority,
+        location,
+        tags,
+        start_at,
+        due_date,
+        recurrence_rule,
+        reminder_offset_minutes,
+        reminder_method,
+        timezone,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    ctx.notify_change("updated", Some(id)).await;
+
+    Ok(json!(todo))
 }
 
 /// 唤醒主窗口

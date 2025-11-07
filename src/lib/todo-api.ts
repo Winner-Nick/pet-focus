@@ -7,6 +7,19 @@ type UpdatePayload = {
   completed?: boolean
 }
 
+export type TodoDetailUpdate = {
+  description: string | null
+  priority: number | null
+  location: string | null
+  tags: string[]
+  start_at?: string | null
+  due_date: string | null
+  recurrence_rule: string | null
+  reminder_offset_minutes: number | null
+  reminder_method: string | null
+  timezone: string | null
+}
+
 export async function listTodos(): Promise<Todo[]> {
   return await invoke<Todo[]>("list_todos")
 }
@@ -35,18 +48,23 @@ export async function deleteTodo(id: number): Promise<void> {
   await invoke("delete_todo", { id })
 }
 
-export async function updateTodoDueDate(
+export async function updateTodoDetails(
   id: number,
-  dueDate: string | null,
+  details: TodoDetailUpdate,
 ): Promise<Todo> {
-  const payload = { id, due_date: dueDate }
-  return await invoke<Todo>("update_todo_due_date", { payload })
-}
+  const payload = {
+    id,
+    description: details.description,
+    priority: details.priority,
+    location: details.location,
+    tags: details.tags,
+    start_at: details.start_at,
+    due_date: details.due_date,
+    recurrence_rule: details.recurrence_rule,
+    reminder_offset_minutes: details.reminder_offset_minutes,
+    reminder_method: details.reminder_method,
+    timezone: details.timezone,
+  }
 
-export async function updateTodoRemindBefore(
-  id: number,
-  remindBeforeMinutes: number,
-): Promise<Todo> {
-  const payload = { id, remind_before_minutes: remindBeforeMinutes }
-  return await invoke<Todo>("update_todo_remind_before", { payload })
+  return await invoke<Todo>("update_todo_details", { payload })
 }

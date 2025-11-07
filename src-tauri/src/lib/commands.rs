@@ -3,7 +3,7 @@ use tauri::{Emitter, State};
 
 use super::{
     models::todo::Todo,
-    services::{setting_service::SettingService, todo_service},
+    services::{setting_service::SettingService, todo},
 };
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use super::webserver::WebServerStatus;
@@ -24,21 +24,25 @@ pub struct UpdateTodoPayload {
     pub completed: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct UpdateTodoDueDatePayload {
+#[derive(Debug, Default, Deserialize)]
+pub struct UpdateTodoDetailsPayload {
     pub id: i32,
+    pub description: Option<String>,
+    pub priority: Option<i32>,
+    pub location: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub start_at: Option<String>,
     pub due_date: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateTodoRemindBeforePayload {
-    pub id: i32,
-    pub remind_before_minutes: i32,
+    pub recurrence_rule: Option<String>,
+    pub reminder_offset_minutes: Option<i32>,
+    pub reminder_method: Option<String>,
+    pub timezone: Option<String>,
 }
 
 #[tauri::command]
 pub async fn list_todos(state: State<'_, AppState>) -> Result<Vec<Todo>, String> {
-    todo_service::list_todos(state.db())
+    todo::list_todos(state.db())
         .await
         .map_err(|err| err.to_string())
 }
@@ -50,7 +54,7 @@ pub async fn create_todo(
 ) -> Result<Todo, String> {
     let title = payload.and_then(|payload| payload.title);
 
-    let result = todo_service::create_todo(state.db(), title)
+    let result = todo::create_todo(state.db(), title)
         .await
         .map_err(|err| err.to_string())?;
 
@@ -65,7 +69,7 @@ pub async fn update_todo(
     state: State<'_, AppState>,
     payload: UpdateTodoPayload,
 ) -> Result<Todo, String> {
-    let result = todo_service::update_todo(state.db(), payload.id, payload.title, payload.completed)
+    let result = todo::update_todo(state.db(), payload.id, payload.title, payload.completed)
         .await
         .map_err(|err| err.to_string())?;
 
@@ -77,7 +81,7 @@ pub async fn update_todo(
 
 #[tauri::command]
 pub async fn delete_todo(state: State<'_, AppState>, id: i32) -> Result<(), String> {
-    todo_service::delete_todo(state.db(), id)
+    todo::delete_todo(state.db(), id)
         .await
         .map_err(|err| err.to_string())?;
 
@@ -88,31 +92,30 @@ pub async fn delete_todo(state: State<'_, AppState>, id: i32) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub async fn update_todo_due_date(
+pub async fn update_todo_details(
     state: State<'_, AppState>,
-    payload: UpdateTodoDueDatePayload,
+    payload: UpdateTodoDetailsPayload,
 ) -> Result<Todo, String> {
-    let result = todo_service::update_todo_due_date(state.db(), payload.id, payload.due_date)
-        .await
-        .map_err(|err| err.to_string())?;
+    let result = todo::update_todo_details(
+        state.db(),
+        payload.id,
+        payload.description,
+        payload.priority,
+        payload.location,
+        payload.tags,
+        payload.start_at,
+        payload.due_date,
+        payload.recurrence_rule,
+        payload.reminder_offset_minutes,
+        payload.reminder_method,
+        payload.timezone,
+    )
+    .await
+    .map_err(|err| err.to_string())?;
 
-    // 统一的变更通知（会自动触发 reschedule）
-    state.notify_todo_change("updated", Some(payload.id)).await;
-
-    Ok(result)
-}
-
-#[tauri::command]
-pub async fn update_todo_remind_before(
-    state: State<'_, AppState>,
-    payload: UpdateTodoRemindBeforePayload,
-) -> Result<Todo, String> {
-    let result = todo_service::update_todo_remind_before(state.db(), payload.id, payload.remind_before_minutes)
-        .await
-        .map_err(|err| err.to_string())?;
-
-    // 统一的变更通知（会自动触发 reschedule）
-    state.notify_todo_change("updated", Some(payload.id)).await;
+    state
+        .notify_todo_change("updated", Some(payload.id))
+        .await;
 
     Ok(result)
 }

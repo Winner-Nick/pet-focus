@@ -12,7 +12,7 @@ use super::{
     connection::ConnectionManager,
     message::WsMessage,
 };
-use super::super::services::todo_service;
+use super::super::services::todo;
 
 /// 调度器消息类型
 enum SchedulerMessage {
@@ -44,7 +44,7 @@ impl DueNotificationScheduler {
                         }
                         
                         // 获取下一个需要提醒的待办
-                        let next_todo = match todo_service::get_next_due_todo(&db).await {
+                        let next_todo = match todo::get_next_due_todo(&db).await {
                             Ok(Some(todo)) => todo,
                             Ok(None) => {
                                 println!("No upcoming due todos, scheduler idle");
@@ -61,7 +61,8 @@ impl DueNotificationScheduler {
                             continue;
                         };
                         
-                        let remind_at = due_date - Duration::minutes(next_todo.remind_before_minutes as i64);
+                        let remind_at = due_date
+                            - Duration::minutes(next_todo.reminder_offset_minutes as i64);
                         let now = Utc::now();
                         
                         // 如果提醒时间已经过了，立即发送通知并重新调度
@@ -171,7 +172,7 @@ impl DueNotificationScheduler {
             .await;
 
         // 标记为已通知
-        if let Err(e) = todo_service::mark_todo_notified(db, todo_id).await {
+    if let Err(e) = todo::mark_todo_notified(db, todo_id).await {
             eprintln!("Failed to mark todo {} as notified: {}", todo_id, e);
         }
     }

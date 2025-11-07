@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
 interface TodoDueDatePickerProps {
   value: string | null;
   onChange: (value: string | null) => void;
-  remindBeforeMinutes?: number;
-  onRemindBeforeChange?: (minutes: number) => void;
+  reminderOffsetMinutes?: number;
+  onReminderOffsetChange?: (minutes: number) => void;
   isNotified?: boolean;
   isCompleted?: boolean;
   disabled?: boolean;
@@ -26,8 +26,8 @@ interface TodoDueDatePickerProps {
 export function TodoDueDatePicker({
   value,
   onChange,
-  remindBeforeMinutes = 15,
-  onRemindBeforeChange,
+  reminderOffsetMinutes = 15,
+  onReminderOffsetChange,
   isNotified = false,
   isCompleted = false,
   disabled = false,
@@ -39,7 +39,7 @@ export function TodoDueDatePicker({
   const [tempTime, setTempTime] = React.useState<string>(
     value ? new Date(value).toTimeString().slice(0, 5) : "23:59"
   );
-  const [tempRemindBefore, setTempRemindBefore] = React.useState<number>(remindBeforeMinutes);
+  const [tempReminderOffset, setTempReminderOffset] = React.useState<number>(reminderOffsetMinutes);
 
   // 当外部 value 改变时更新临时状态
   React.useEffect(() => {
@@ -53,10 +53,10 @@ export function TodoDueDatePicker({
     }
   }, [value]);
 
-  // 当外部 remindBeforeMinutes 改变时更新临时状态
+  // 当外部提醒提前分钟改变时更新临时状态
   React.useEffect(() => {
-    setTempRemindBefore(remindBeforeMinutes);
-  }, [remindBeforeMinutes]);
+    setTempReminderOffset(reminderOffsetMinutes);
+  }, [reminderOffsetMinutes]);
 
   // 打开时重置临时状态为当前值
   const handleOpenChange = (isOpen: boolean) => {
@@ -69,7 +69,7 @@ export function TodoDueDatePicker({
         setTempDate(undefined);
         setTempTime("23:59");
       }
-      setTempRemindBefore(remindBeforeMinutes);
+  setTempReminderOffset(reminderOffsetMinutes);
     }
     setOpen(isOpen);
   };
@@ -93,8 +93,8 @@ export function TodoDueDatePicker({
     }
     
     // 更新提醒时间（如果有变化且提供了回调）
-    if (onRemindBeforeChange && tempRemindBefore !== remindBeforeMinutes) {
-      onRemindBeforeChange(tempRemindBefore);
+    if (onReminderOffsetChange && tempReminderOffset !== reminderOffsetMinutes) {
+      onReminderOffsetChange(tempReminderOffset);
     }
     
     setOpen(false);
@@ -158,66 +158,70 @@ export function TodoDueDatePicker({
       )}
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>设置到期时间</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="time-picker" className="text-sm">
-                时间
-              </Label>
-              <Input
-                type="time"
-                id="time-picker"
-                value={tempTime}
-                onChange={handleTimeChange}
-                className="h-9"
-              />
-            </div>
-            {tempDate && (
-              <div className="space-y-2">
-                <Label htmlFor="remind-before" className="text-sm">
-                  提前提醒（分钟）
-                </Label>
-                <Input
-                  type="number"
-                  id="remind-before"
-                  min={0}
-                  max={1440}
-                  step={1}
-                  value={tempRemindBefore}
-                  onChange={(e) => setTempRemindBefore(parseInt(e.target.value) || 0)}
-                  className="h-9"
-                  placeholder="15"
-                />
+        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-sm overflow-hidden p-0 sm:max-h-[calc(100vh-4rem)]">
+          <div className="flex h-full flex-col">
+            <DialogHeader className="px-6 pt-6">
+              <DialogTitle>设置到期时间</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto px-6">
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="time-picker" className="text-sm">
+                    时间
+                  </Label>
+                  <Input
+                    type="time"
+                    id="time-picker"
+                    value={tempTime}
+                    onChange={handleTimeChange}
+                    className="h-9"
+                  />
+                </div>
+                {tempDate && (
+                  <div className="space-y-2">
+                    <Label htmlFor="remind-before" className="text-sm">
+                      提前提醒（分钟）
+                    </Label>
+                    <Input
+                      type="number"
+                      id="remind-before"
+                      min={0}
+                      max={1440}
+                      step={1}
+                      value={tempReminderOffset}
+                      onChange={(e) => setTempReminderOffset(parseInt(e.target.value) || 0)}
+                      className="h-9"
+                      placeholder="15"
+                    />
+                  </div>
+                )}
+                <div className="flex justify-center">
+                  <Calendar
+                    mode="single"
+                    selected={tempDate}
+                    onSelect={handleDateSelect}
+                    autoFocus
+                    className="rounded-md border"
+                  />
+                </div>
               </div>
-            )}
-            <div className="flex justify-center">
-              <Calendar
-                mode="single"
-                selected={tempDate}
-                onSelect={handleDateSelect}
-                initialFocus
-                className="rounded-md border"
-              />
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setOpen(false)}
-            >
-              取消
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleConfirm}
-              disabled={!tempDate}
-            >
-              确定
-            </Button>
+            <div className="flex gap-2 border-t px-6 py-4">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setOpen(false)}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleConfirm}
+                disabled={!tempDate}
+              >
+                确定
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

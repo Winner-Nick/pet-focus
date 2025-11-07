@@ -70,45 +70,38 @@ async fn run_migrations(db: &DatabaseConnection) -> Result<()> {
 
     // 如果表已存在但缺少新字段，则添加它们
     if check_columns.is_some() {
-        // 尝试添加 created_date 字段
-        let _ = db
-            .execute(Statement::from_string(
-                backend,
-                "ALTER TABLE todos ADD COLUMN created_date TEXT".to_owned(),
-            ))
-            .await;
+        // 逐个添加缺失字段（忽略已存在的错误）
+        let alter_statements = [
+            "ALTER TABLE todos ADD COLUMN created_date TEXT",
+            "ALTER TABLE todos ADD COLUMN modified_date TEXT",
+            "ALTER TABLE todos ADD COLUMN due_date TEXT",
+            "ALTER TABLE todos ADD COLUMN remind_before_minutes INTEGER DEFAULT 15",
+            "ALTER TABLE todos ADD COLUMN notified INTEGER DEFAULT 0",
+            "ALTER TABLE todos ADD COLUMN uid TEXT",
+            "ALTER TABLE todos ADD COLUMN description TEXT",
+            "ALTER TABLE todos ADD COLUMN status TEXT DEFAULT 'NEEDS-ACTION'",
+            "ALTER TABLE todos ADD COLUMN percent_complete INTEGER",
+            "ALTER TABLE todos ADD COLUMN priority INTEGER",
+            "ALTER TABLE todos ADD COLUMN location TEXT",
+            "ALTER TABLE todos ADD COLUMN tags TEXT",
+            "ALTER TABLE todos ADD COLUMN recurrence_rule TEXT",
+            "ALTER TABLE todos ADD COLUMN reminder_method TEXT",
+            "ALTER TABLE todos ADD COLUMN reminder_last_triggered_at TEXT",
+            "ALTER TABLE todos ADD COLUMN timezone TEXT",
+            "ALTER TABLE todos ADD COLUMN completed_at TEXT",
+            "ALTER TABLE todos ADD COLUMN dirty INTEGER DEFAULT 0",
+            "ALTER TABLE todos ADD COLUMN remote_url TEXT",
+            "ALTER TABLE todos ADD COLUMN remote_etag TEXT",
+            "ALTER TABLE todos ADD COLUMN remote_calendar_url TEXT",
+            "ALTER TABLE todos ADD COLUMN sync_token TEXT",
+            "ALTER TABLE todos ADD COLUMN last_synced_at TEXT"
+        ];
 
-        // 尝试添加 modified_date 字段
-        let _ = db
-            .execute(Statement::from_string(
-                backend,
-                "ALTER TABLE todos ADD COLUMN modified_date TEXT".to_owned(),
-            ))
-            .await;
-
-        // 尝试添加 due_date 字段
-        let _ = db
-            .execute(Statement::from_string(
-                backend,
-                "ALTER TABLE todos ADD COLUMN due_date TEXT".to_owned(),
-            ))
-            .await;
-
-        // 尝试添加 remind_before_minutes 字段
-        let _ = db
-            .execute(Statement::from_string(
-                backend,
-                "ALTER TABLE todos ADD COLUMN remind_before_minutes INTEGER DEFAULT 15".to_owned(),
-            ))
-            .await;
-
-        // 尝试添加 notified 字段
-        let _ = db
-            .execute(Statement::from_string(
-                backend,
-                "ALTER TABLE todos ADD COLUMN notified INTEGER DEFAULT 0".to_owned(),
-            ))
-            .await;
+        for stmt in alter_statements {
+            let _ = db
+                .execute(Statement::from_string(backend, stmt.to_owned()))
+                .await;
+        }
 
         // 为旧数据设置默认值（使用 created_at 的值）
         let _ = db
@@ -122,6 +115,20 @@ async fn run_migrations(db: &DatabaseConnection) -> Result<()> {
             .execute(Statement::from_string(
                 backend,
                 "UPDATE todos SET modified_date = updated_at WHERE modified_date IS NULL".to_owned(),
+            ))
+            .await;
+
+        let _ = db
+            .execute(Statement::from_string(
+                backend,
+                "UPDATE todos SET status = 'NEEDS-ACTION' WHERE status IS NULL".to_owned(),
+            ))
+            .await;
+
+        let _ = db
+            .execute(Statement::from_string(
+                backend,
+                "UPDATE todos SET uid = printf('local-%s', id) WHERE uid IS NULL OR uid = ''".to_owned(),
             ))
             .await;
     }
