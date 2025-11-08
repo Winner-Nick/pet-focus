@@ -1,88 +1,44 @@
-// 库模块声明 - 所有业务逻辑模块都在 lib 子目录下
-mod lib {
-    pub mod commands;
-    pub mod db;
-    pub mod entities;
-    pub mod models;
-    pub mod services;
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub mod tray;
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub mod webserver;
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub mod window;
+// 新架构模块
+mod core;
+mod infrastructure;
+mod features;
+
+// 重新导出核心类型
+pub use core::AppState;
+
+// 重新导出旧的 entities（向后兼容）
+pub mod entities {
+    pub use crate::features::todo::entity as todo;
+    pub use crate::features::settings::entity as setting;
+
+    pub mod prelude {
+        pub use super::todo::Entity as Todo;
+        pub use super::setting::Entity as Setting;
+    }
 }
 
-// 重新导出公共 API
-pub use lib::entities;
-
-use sea_orm::DatabaseConnection;
-use tauri::{AppHandle, Emitter, Manager, Wry};
-
-use lib::services::caldav::{CalDavSyncManager, SyncReason};
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use lib::webserver::WebServerManager;
-
-pub struct AppState {
-    app_handle: AppHandle<Wry>,
-    db: DatabaseConnection,
-    caldav: CalDavSyncManager,
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    web_server: WebServerManager,
+// 重新导出 models（API 响应模型）
+pub mod models {
+    pub mod todo {
+        pub use crate::features::todo::models::*;
+    }
+    pub mod setting {
+        pub use crate::features::settings::models::*;
+    }
 }
 
-impl AppState {
-    pub fn new(app_handle: AppHandle<Wry>, db: DatabaseConnection) -> Self {
-        let caldav = CalDavSyncManager::new(db.clone(), app_handle.clone());
-        Self {
-            app_handle,
-            db,
-            caldav,
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            web_server: WebServerManager::new(),
-        }
-    }
+use std::sync::Arc;
+use tauri::Manager;
+use core::Feature;
+use infrastructure::database::{init_db, DatabaseRegistry};
+use features::{todo::TodoFeature, settings::SettingsFeature};
 
-    pub fn db(&self) -> &DatabaseConnection {
-        &self.db
-    }
-
-    pub fn app_handle(&self) -> AppHandle<Wry> {
-        self.app_handle.clone()
-    }
-
-    pub fn caldav(&self) -> &CalDavSyncManager {
-        &self.caldav
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub fn web_server(&self) -> &WebServerManager {
-        &self.web_server
-    }
-
-    /// 统一的 todo 变更通知方法
-    /// 当任何 todo 数据发生变化时调用此方法，会：
-    /// 1. 发送事件给前端
-    /// 2. 触发调度器重新调度
-    pub async fn notify_todo_change(&self, action: &'static str, todo_id: Option<i32>) {
-        // 通知前端（标记为来自本地命令）
-        if let Err(err) = self.app_handle.emit(
-            "todo-data-updated",
-            serde_json::json!({
-                "action": action,
-                "todoId": todo_id,
-                "source": "local"
-            }),
-        ) {
-            eprintln!("Failed to emit todo change event: {err}");
-        }
-
-        // 触发调度器重新调度
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        self.web_server.reschedule_notifications().await;
-
-        self.caldav.trigger(SyncReason::DataChanged);
-    }
+/// 初始化所有 Features
+fn init_features() -> Vec<Arc<dyn Feature>> {
+    vec![
+        TodoFeature::new(),
+        SettingsFeature::new(),
+    ]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -92,95 +48,108 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle();
 
-            match tauri::async_runtime::block_on(lib::db::init_db(&handle)) {
-                Ok(db) => {
-                    let state = AppState::new(handle.clone(), db);
+            // 初始化数据库
+            let db = tauri::async_runtime::block_on(init_db(&handle))
+                .map_err(|e| format!("Failed to init database: {}", e))?;
 
-                    // 根据设置决定是否自动启动 WebServer
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    {
-                        use lib::services::setting_service::SettingService;
+            // 初始化所有 Features
+            let features = init_features();
 
-                        let db_clone = state.db().clone();
-                        let app_handle = state.app_handle();
-                        let web_server = state.web_server().clone();
+            // 创建数据库注册表并执行所有 Migrations
+            let mut db_registry = DatabaseRegistry::new();
+            for feature in &features {
+                feature.register_database(&mut db_registry);
+            }
 
-                        tauri::async_runtime::spawn(async move {
-                            match SettingService::get_bool(&db_clone, "webserver.auto_start", false)
-                                .await
-                            {
+            tauri::async_runtime::block_on(db_registry.run_migrations(&db))
+                .map_err(|e| format!("Failed to run migrations: {}", e))?;
+
+            // 创建 AppState
+            let state = AppState::new(handle.clone(), db, features.clone());
+
+            // 初始化所有 Features
+            for feature in &features {
+                tauri::async_runtime::block_on(feature.initialize(&state))
+                    .map_err(|e| format!("Failed to initialize feature '{}': {}", feature.name(), e))?;
+            }
+
+            app.manage(state);
+
+            // 创建系统托盘（仅桌面平台）
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            {
+                if let Some(app_state) = app.try_state::<AppState>() {
+                    app_state
+                        .tray_manager()
+                        .create_tray(&handle)
+                        .map_err(|e| format!("Failed to create tray: {}", e))?;
+                    
+                    // 自动启动 WebServer（如果配置了）
+                    let app_handle = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(state) = app_handle.try_state::<AppState>() {
+                            use crate::features::settings::service::SettingService;
+                            
+                            match SettingService::get_bool(state.db(), "webserver.auto_start", false).await {
                                 Ok(true) => {
-                                    println!("Auto-starting WebServer based on settings...");
-                                    if let Err(e) = web_server
-                                        .start(db_clone.clone(), app_handle.clone(), None)
-                                        .await
+                                    println!("Auto-starting web server...");
+                                    if let Err(e) = state.webserver_manager()
+                                        .start(state.db().clone(), app_handle.clone(), None)
+                                        .await 
                                     {
-                                        eprintln!("Failed to auto-start WebServer: {}", e);
-                                    } else {
-                                        println!("WebServer auto-started successfully");
-                                        // 更新托盘菜单
-                                        let _ =
-                                            lib::tray::update_tray_menu_from_app(&app_handle, true);
+                                        eprintln!("Failed to auto-start web server: {}", e);
                                     }
                                 }
-                                Ok(false) => {
-                                    println!("WebServer auto-start is disabled");
-                                }
+                                Ok(false) => {}
                                 Err(e) => {
                                     eprintln!("Failed to read auto-start setting: {}", e);
                                 }
                             }
-                        });
-                    }
-
-                    app.manage(state);
-
-                    // 创建系统托盘（仅桌面平台）
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    if let Err(e) = lib::tray::create_tray(&handle) {
-                        eprintln!("Failed to create system tray: {}", e);
-                    }
-
-                    Ok(())
+                        }
+                    });
                 }
-                Err(err) => Err(err.into()),
             }
+
+            Ok(())
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                // 桌面平台：隐藏窗口而不是关闭
                 #[cfg(not(any(target_os = "android", target_os = "ios")))]
                 {
-                    let _ = lib::window::hide_main_window(&window.app_handle());
+                    use crate::infrastructure::window;
+                    // 阻止窗口关闭，改为隐藏
                     api.prevent_close();
-                }
-                // 移动平台：允许正常关闭
-                #[cfg(any(target_os = "android", target_os = "ios"))]
-                {
-                    // 不阻止关闭，让应用正常关闭
-                    let _ = (window, api);
+                    // 隐藏窗口并在 macOS 上隐藏 Dock 图标
+                    let _ = window::hide_main_window(&window.app_handle());
                 }
             }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            lib::commands::list_todos,
-            lib::commands::create_todo,
-            lib::commands::update_todo,
-            lib::commands::delete_todo,
-            lib::commands::update_todo_details,
-            lib::commands::get_caldav_status,
-            lib::commands::save_caldav_config,
-            lib::commands::clear_caldav_config,
-            lib::commands::sync_caldav_now,
-            lib::commands::get_theme_preference,
-            lib::commands::set_theme_preference,
+            // Todo Feature Commands
+            features::todo::commands::list_todos,
+            features::todo::commands::create_todo,
+            features::todo::commands::update_todo,
+            features::todo::commands::delete_todo,
+            features::todo::commands::update_todo_details,
+            
+            // CalDAV Commands
+            features::todo::caldav_commands::get_caldav_status,
+            features::todo::caldav_commands::save_caldav_config,
+            features::todo::caldav_commands::clear_caldav_config,
+            features::todo::caldav_commands::sync_caldav_now,
+            
+            // Settings Feature Commands
+            features::settings::commands::get_theme_preference,
+            features::settings::commands::set_theme_preference,
+            
+            // WebServer Commands (Desktop only)
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            lib::commands::start_web_server,
+            infrastructure::webserver::commands::start_web_server,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            lib::commands::stop_web_server,
+            infrastructure::webserver::commands::stop_web_server,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            lib::commands::web_server_status
+            infrastructure::webserver::commands::web_server_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
