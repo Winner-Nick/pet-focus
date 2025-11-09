@@ -5,9 +5,9 @@
 <p>一个现代化的待办事项管理桌面应用，基于 Tauri 2.x + React + TypeScript 构建</p>
 <p style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:nowrap">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.x-blue" alt="Tauri"></a>
-  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-18-61dafb" alt="React"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-2021-orange" alt="Rust"></a>
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2-blue" alt="Tauri"></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61dafb" alt="React"></a>
+  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.9-orange" alt="Rust"></a>
 </p>
 
 </div>
@@ -214,8 +214,7 @@ pet-focus/
 
 ## 💬 联系方式
 
-- **作者**: YigesMx
-- **GitHub**: [@YigesMx](https://github.com/YigesMx)
+- **作者**: YigesMx、milkieTigera、Winner-Nick
 - **Issues**: [GitHub Issues](https://github.com/YigesMx/pet-focus/issues)
 
 ---
@@ -224,7 +223,7 @@ pet-focus/
 
 **[⬆ 回到顶部](#pet-focus)**
 
-Made with ❤️ by YigesMx
+Made with ❤️ by YigesMx、milkieTigera、Winner-Nick
 
 </div>
 
