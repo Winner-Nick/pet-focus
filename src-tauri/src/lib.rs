@@ -82,7 +82,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                features::window::manager::handle_window_close_request(window, api);
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                {
+                    features::window::manager::handle_window_close_request(window, api);
+                }
             }
             _ => {}
         })

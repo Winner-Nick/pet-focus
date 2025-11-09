@@ -2,12 +2,14 @@ use anyhow::Context;
 use serde_json::{json, Value};
 use tauri::Manager;
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::infrastructure::webserver;
 
 use super::notifications;
 use crate::features::todo::core::service;
 
 /// 注册 Todo Feature 的所有 WebSocket handlers
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn register_handlers(registry: &mut webserver::HandlerRegistry) {
     // 注册可订阅的事件
     registry.register_event(notifications::TODO_DUE_EVENT, "Todo 到期提醒事件 - 当待办事项到期时广播");

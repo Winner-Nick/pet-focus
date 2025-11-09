@@ -6,8 +6,9 @@ use tauri::{AppHandle, Wry};
 
 use crate::core::Feature;
 use crate::features::todo::sync::CalDavSyncManager;
-use crate::infrastructure::webserver::WebServerManager;
 use crate::infrastructure::notification::NotificationManager;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use crate::infrastructure::webserver::WebServerManager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::infrastructure::tray::TrayManager;
 
