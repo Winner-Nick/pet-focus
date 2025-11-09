@@ -83,6 +83,9 @@ pub async fn save_caldav_config(
         .await
         .map_err(|e| e.to_string())?;
 
+    // 发送成功通知
+    crate::features::todo::api::notifications::notify_caldav_config_saved(state.notification());
+
     // 触发同步
     use super::sync::SyncReason;
     state.caldav_sync_manager().trigger(SyncReason::ConfigUpdated);
@@ -101,6 +104,9 @@ pub async fn clear_caldav_config(state: State<'_, AppState>) -> Result<CalDavSta
     crate::features::todo::core::service::cleanup_pending_deletes(state.db())
         .await
         .map_err(|e| e.to_string())?;
+
+    // 发送成功通知
+    crate::features::todo::api::notifications::notify_caldav_config_cleared(state.notification());
 
     // 触发同步
     use super::sync::SyncReason;

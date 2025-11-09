@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
 
 import { reportError } from "@/shared/lib/report-error"
 
@@ -79,7 +78,7 @@ export function useTodoMutations(): TodoMutations {
     mutationFn: (title?: string) => createTodo(title),
     onSuccess: () => {
       invalidateTodos()
-      toast.success("已创建新的待办事项")
+      // 后端已通过 NotificationManager 发送成功通知
     },
     onError: (error) => {
       reportError("创建待办失败", error)
@@ -123,7 +122,7 @@ export function useTodoMutations(): TodoMutations {
     mutationFn: ({ id }: DeleteTodoInput) => deleteTodo(id),
     onSuccess: () => {
       invalidateTodos()
-      toast.success("已删除待办")
+      // 后端已通过 NotificationManager 发送成功通知
     },
     onError: (error, { id }) => {
       reportError("删除待办失败", error)

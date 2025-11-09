@@ -61,3 +61,19 @@ pub fn notify_sync_error(notification_manager: &NotificationManager, error: &str
         ToastLevel::Error,
     );
 }
+
+/// CalDAV 配置保存成功通知
+pub fn notify_caldav_config_saved(notification_manager: &NotificationManager) {
+    let _ = notification_manager.send_toast(
+        "CalDAV 配置已保存".to_string(),
+        ToastLevel::Success,
+    );
+}
+
+/// CalDAV 配置清除成功通知
+pub fn notify_caldav_config_cleared(notification_manager: &NotificationManager) {
+    let _ = notification_manager.send_toast(
+        "已清除 CalDAV 配置".to_string(),
+        ToastLevel::Success,
+    );
+}

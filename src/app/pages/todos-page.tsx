@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { TodoDetailDialog } from "@/features/todo/components/todo-detail-dialog"
@@ -7,9 +8,11 @@ import { TodoList } from "@/features/todo/components/todo-list"
 import { useTodosQuery } from "@/features/todo/api/todo.queries"
 import { useTodoMutations } from "@/features/todo/hooks/useTodoMutations"
 import { useTodoSyncEvents } from "@/features/todo/hooks/useTodoSyncEvents"
+import { todoKeys } from "@/features/todo/api/todo.keys"
 import type { Todo } from "@/features/todo/types/todo.types"
 
 export function TodosPage() {
+  const queryClient = useQueryClient()
   const { data: todos = [], isPending } = useTodosQuery()
   const {
     createTodo,
@@ -22,6 +25,12 @@ export function TodosPage() {
   } = useTodoMutations()
 
   useTodoSyncEvents()
+
+  // 每次进入 TodosPage 时强制刷新数据，确保显示最新内容
+  useEffect(() => {
+    console.log("[TodosPage] 页面挂载，强制刷新 Todo 列表")
+    void queryClient.invalidateQueries({ queryKey: todoKeys.all })
+  }, [])
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTodoId, setDetailTodoId] = useState<number | null>(null)

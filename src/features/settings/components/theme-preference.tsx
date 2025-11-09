@@ -2,7 +2,6 @@ import { type ReactNode, useCallback, useMemo } from "react"
 import { Loader2, Moon, Sun, MonitorCog } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
-import { toast } from "sonner"
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import type { ThemePreference } from "@/features/settings/api/theme.api"
@@ -47,7 +46,7 @@ export function ThemePreferenceSelector() {
     (value: string) => {
       if (mutation.isPending) return
       if (value !== "light" && value !== "dark" && value !== "system") {
-        toast.error("无法识别的主题设置")
+        console.error("Invalid theme value:", value)
         return
       }
 
@@ -55,13 +54,9 @@ export function ThemePreferenceSelector() {
 
       setTheme(value)
       mutation.mutate(value, {
-        onSuccess: () => {
-          toast.success("主题设置已更新")
-        },
         onError: (error) => {
           console.error(error)
           setTheme(previous)
-          toast.error("更新主题设置失败")
         },
       })
     },

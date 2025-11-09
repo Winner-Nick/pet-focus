@@ -183,6 +183,43 @@ impl CalDavClient {
         self.put_resource(&resource, ics, etag, false).await
     }
 
+    /// 获取单个 Todo（用于冲突解决时获取远端最新版本）
+    pub async fn get_todo(&self, href: &str) -> Result<RemoteTodo> {
+        let resource = self.resolve_href(href)?;
+        
+        let response = self
+            .send_authenticated_request(Method::GET, &resource, &[], None)
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(anyhow!("CalDAV GET failed: {status} {text}"));
+        }
+
+        // 从响应头获取 ETag
+        let etag = response
+            .headers()
+            .get(header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim_matches('"').to_string());
+
+        let ical_data = response
+            .text()
+            .await
+            .context("failed to read CalDAV GET response")?;
+
+        let item = parse_ical_todo(&ical_data)
+            .with_context(|| format!("failed to parse VTODO from {}", href))?;
+
+        Ok(RemoteTodo {
+            href: href.to_string(),
+            etag,
+            item,
+            raw_ical: ical_data,
+        })
+    }
+
     pub async fn delete_todo(&self, href: &str, etag: Option<&str>) -> Result<()> {
         let resource = self.resolve_href(href)?;
         let mut headers: Vec<(header::HeaderName, String)> = Vec::new();

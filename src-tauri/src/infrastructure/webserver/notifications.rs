@@ -3,7 +3,7 @@ use crate::infrastructure::notification::{NotificationManager, ToastLevel};
 /// WebServer 启动通知
 pub fn notify_server_started(notification_manager: &NotificationManager, port: u16) {
     let _ = notification_manager.send_toast(
-        format!("API 服务器已启动，端口: {}", port),
+        format!("外部 API 已启动：http://127.0.0.1:{}", port),
         ToastLevel::Success,
     );
 }
@@ -11,8 +11,8 @@ pub fn notify_server_started(notification_manager: &NotificationManager, port: u
 /// WebServer 停止通知
 pub fn notify_server_stopped(notification_manager: &NotificationManager) {
     let _ = notification_manager.send_toast(
-        "API 服务器已停止".to_string(),
-        ToastLevel::Info,
+        "已停止外部 API".to_string(),
+        ToastLevel::Success,
     );
 }
 

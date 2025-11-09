@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { BottomNav } from "@/app/navigation/bottom-nav";
 import { FocusPage, SettingsPage, StatsPage, TodosPage, type Page } from "@/app/pages";
+import { NotificationCenter } from "@/components/app/notification-center";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("todos");
@@ -24,15 +25,20 @@ function App() {
   };
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-10 pb-24">
-        {renderPage()}
+    <>
+      {/* 统一的通知管理中心 */}
+      <NotificationCenter />
+      
+      <div className="flex h-dvh flex-col overflow-hidden bg-background">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-10 pb-24">
+          {renderPage()}
+          </div>
         </div>
-      </div>
 
-      <BottomNav currentPage={currentPage} onSelect={setCurrentPage} />
-    </div>
+        <BottomNav currentPage={currentPage} onSelect={setCurrentPage} />
+      </div>
+    </>
   );
 }
 

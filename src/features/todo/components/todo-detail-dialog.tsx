@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { CalendarClock, MapPin, Repeat, Tag, Timer } from "lucide-react"
-import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -121,11 +120,11 @@ export function TodoDetailDialog({
     try {
       setSaving(true)
       await onSubmit(todo.id, payload)
-      toast.success("待办详情已更新")
+      // 后端已通过 NotificationManager 发送成功通知
       onOpenChange(false)
     } catch (error) {
-      console.error(error)
-      toast.error("更新待办详情失败")
+      console.error("更新待办详情失败", error)
+      // 错误通知由 reportError 或后端处理
     } finally {
       setSaving(false)
     }

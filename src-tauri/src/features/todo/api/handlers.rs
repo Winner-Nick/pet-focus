@@ -16,7 +16,7 @@ pub fn register_handlers(registry: &mut HandlerRegistry) {
     registry.register_event(TODO_DUE_EVENT, "Todo 到期提醒事件 - 当待办事项到期时广播");
     
     // 列出所有待办
-    registry.register("todo.list", |_method, _params, ctx| {
+    registry.register_call("todo.list", |_method, _params, ctx| {
         Box::pin(async move {
             let todos = service::list_todos(ctx.db())
                 .await
@@ -26,7 +26,7 @@ pub fn register_handlers(registry: &mut HandlerRegistry) {
     });
 
     // 获取单个待办
-    registry.register("todo.get", |_method, params, ctx| {
+    registry.register_call("todo.get", |_method, params, ctx| {
         Box::pin(async move {
             let id = params
                 .get("id")
@@ -42,7 +42,7 @@ pub fn register_handlers(registry: &mut HandlerRegistry) {
     });
 
     // 创建待办
-    registry.register("todo.create", |_method, params, ctx| {
+    registry.register_call("todo.create", |_method, params, ctx| {
         Box::pin(async move {
             let title = params
                 .get("title")
@@ -93,7 +93,7 @@ pub fn register_handlers(registry: &mut HandlerRegistry) {
     });
 
     // 更新待办
-    registry.register("todo.update", |_method, params, ctx| {
+    registry.register_call("todo.update", |_method, params, ctx| {
         Box::pin(async move {
             let id = params
                 .get("id")
@@ -147,7 +147,7 @@ pub fn register_handlers(registry: &mut HandlerRegistry) {
     });
 
     // 删除待办
-    registry.register("todo.delete", |_method, params, ctx| {
+    registry.register_call("todo.delete", |_method, params, ctx| {
         Box::pin(async move {
             let id = params
                 .get("id")
@@ -198,7 +198,7 @@ pub fn register_handlers(registry: &mut HandlerRegistry) {
     });
 
     // 更新待办详情
-    registry.register("todo.update_details", |_method, params, ctx| {
+    registry.register_call("todo.update_details", |_method, params, ctx| {
         Box::pin(async move {
             let id = params
                 .get("id")

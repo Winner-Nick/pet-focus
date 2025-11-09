@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
-import { toast } from "sonner"
 
 import {
   CALDAV_SYNC_EVENT,
@@ -78,7 +77,7 @@ export function useCaldavSync() {
       try {
         const data = await saveCaldavConfig(payload)
         setStatus(data)
-        toast.success("CalDAV 配置已保存")
+        // 后端已通过 NotificationManager 发送成功通知
       } catch (error) {
         reportError("保存 CalDAV 配置失败", error)
       } finally {
@@ -93,7 +92,7 @@ export function useCaldavSync() {
     try {
       const data = await clearCaldavConfig()
       setStatus(data)
-      toast.success("已清除 CalDAV 配置")
+      // 后端已通过 NotificationManager 发送成功通知
     } catch (error) {
       reportError("清除 CalDAV 配置失败", error)
     } finally {
@@ -103,7 +102,8 @@ export function useCaldavSync() {
 
   const syncNow = useCallback(async () => {
     if (!status?.configured) {
-      toast.error("请先保存 CalDAV 配置")
+      console.warn("请先保存 CalDAV 配置")
+      // 应该由后端返回错误并发送通知，这里只是客户端预检查
       return
     }
 
@@ -112,17 +112,8 @@ export function useCaldavSync() {
 
     try {
       const event = await syncCaldavNow()
-      switch (event.outcome.status) {
-        case "success":
-          toast.success("已完成 CalDAV 同步")
-          break
-        case "skipped":
-          toast.info("CalDAV 同步已跳过")
-          break
-        case "error":
-          toast.error(event.outcome.message)
-          break
-      }
+      // 后端已通过 NotificationManager 发送相应的通知
+      console.log(`[CalDAV Sync] ${event.outcome.status}`, event)
     } catch (error) {
       reportError("同步 CalDAV 数据失败", error)
     } finally {

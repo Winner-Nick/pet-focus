@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
-import { toast } from "sonner"
 
 import {
   getWebServerStatus,
@@ -67,12 +66,8 @@ export function useWebServerControl() {
       try {
         const status = nextEnabled ? await startWebServer() : await stopWebServer()
         setServerStatus(status)
-        const address = resolveAddress(status)
-        if (nextEnabled) {
-          toast.success(address ? `外部 API 已启动：${address}` : "外部 API 已启动")
-        } else {
-          toast.success("已停止外部 API")
-        }
+        // 后端已通过 NotificationManager 发送成功通知
+        console.log(`[WebServer] ${nextEnabled ? 'Started' : 'Stopped'}`, status)
       } catch (error) {
         reportError(nextEnabled ? "启动外部 API 失败" : "停止外部 API 失败", error)
         await refreshServerStatus()

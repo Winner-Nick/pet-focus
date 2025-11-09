@@ -1,14 +1,13 @@
 import { useEffect } from "react"
 import { listen } from "@tauri-apps/api/event"
 import { useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
 
 import { todoKeys } from "@/features/todo/api/todo.keys"
 
 type TodoSyncEvent = {
   action?: string
   todoId?: number | null
-  source?: "local" | "webserver"
+  source?: "local" | "webserver" | "caldav"
 }
 
 export function useTodoSyncEvents() {
@@ -20,29 +19,30 @@ export function useTodoSyncEvents() {
 
     const setup = async () => {
       try {
+        console.log(`[useTodoSyncEvents] 正在注册 todo-data-updated 事件监听器...`)
+        
         const off = await listen<TodoSyncEvent>("todo-data-updated", (event) => {
-          if (disposed) return
-          if (event.payload?.source !== "webserver") {
+          console.log(`[useTodoSyncEvents] 收到事件:`, event.payload)
+          
+          if (disposed) {
+            console.log(`[useTodoSyncEvents] 已disposed，忽略事件`)
+            return
+          }
+          
+          // 只监听外部数据源的变更（WebServer API 或 CalDAV 同步）
+          if (event.payload?.source !== "webserver" && event.payload?.source !== "caldav") {
+            console.log(`[useTodoSyncEvents] 非外部来源，忽略事件: source=${event.payload?.source}`)
             return
           }
 
+          console.log(`[useTodoSyncEvents] ✅ 触发数据刷新: source=${event.payload?.source}, action=${event.payload?.action}`)
           void queryClient.invalidateQueries({ queryKey: todoKeys.all })
 
-          switch (event.payload?.action) {
-            case "created":
-              toast.info("收到新待办 (外部)")
-              break
-            case "updated":
-              toast.info("待办内容已更新 (外部)")
-              break
-            case "deleted":
-              toast.info("待办已删除 (外部)")
-              break
-            default:
-              toast.info("待办列表来自外部更新")
-              break
-          }
+          // 后端已经通过 NotificationManager 发送通知，这里只需刷新数据
+          console.log(`[useTodoSyncEvents] 外部数据同步完成`)
         })
+
+        console.log(`[useTodoSyncEvents] ✅ 事件监听器注册成功`)
 
         if (disposed) {
           off()
@@ -50,7 +50,7 @@ export function useTodoSyncEvents() {
           unsubscribe = off
         }
       } catch (error) {
-        console.error("监听待办同步事件失败", error)
+        console.error("❌ 监听待办同步事件失败", error)
       }
     }
 

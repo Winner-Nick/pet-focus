@@ -197,23 +197,30 @@ impl CalDavSyncManager {
     fn emit_event(&self, event: &CalDavSyncEvent) {
         use tauri::Emitter;
         
+        eprintln!("[CalDAV Sync] Emitting event: {:?}", event.outcome);
+        
         // 发送 CalDAV sync 事件（直接使用 Tauri Event）
         if let Err(err) = self.inner.app_handle.emit(SYNC_EVENT, event) {
             eprintln!("failed to emit CalDAV sync event: {err}");
-        }
-        
-        // 额外通知前端：告知待办数据已变更，以便前端立即刷新列表
-        if let Err(err) = self.inner.app_handle.emit(
-            "todo-data-updated",
-            json!({ "action": serde_json::Value::Null, "todoId": serde_json::Value::Null, "source": "caldav" }),
-        ) {
-            eprintln!("failed to emit todo-data-updated event: {err}");
         }
         
         // Toast 通知 (用户界面) & 触发调度器重新规划
         if let Some(state) = self.inner.app_handle.try_state::<crate::core::AppState>() {
             match &event.outcome {
                 SyncOutcome::Success { created, updated, pushed, .. } => {
+                    eprintln!("[CalDAV Sync] Success! created={}, updated={}, pushed={}", created, updated, pushed);
+                    
+                    // 通知前端：待办数据已变更，以便前端立即刷新列表
+                    eprintln!("[CalDAV Sync] Emitting todo-data-updated event with source=caldav");
+                    if let Err(err) = self.inner.app_handle.emit(
+                        "todo-data-updated",
+                        json!({ "action": "sync", "todoId": serde_json::Value::Null, "source": "caldav" }),
+                    ) {
+                        eprintln!("❌ failed to emit todo-data-updated event: {err}");
+                    } else {
+                        eprintln!("✅ Successfully emitted todo-data-updated event");
+                    }
+                    
                     crate::features::todo::api::notifications::notify_sync_success(
                         state.notification(),
                         *created,
@@ -351,9 +358,30 @@ async fn update_local_from_remote(
         return Ok(());
     }
     
+    // Last-Write-Wins 策略：比较时间戳决定是否覆盖本地
     if existing.dirty {
-        // Skip overwriting local changes that still need to be pushed.
-        return Ok(());
+        let local_modified = existing.last_modified_at;
+        let remote_modified = remote.item.last_modified.unwrap_or(now);
+        
+        if remote_modified > local_modified {
+            // 远端更新更晚，覆盖本地（即使本地有未推送的修改）
+            eprintln!(
+                "⚠️  Conflict resolved: Remote version is newer (remote: {}, local: {}), overwriting local todo {}",
+                remote_modified.to_rfc3339(),
+                local_modified.to_rfc3339(),
+                existing.id
+            );
+            // 继续执行更新逻辑
+        } else {
+            // 本地更新更晚，保留本地修改，稍后会推送到远端
+            eprintln!(
+                "✓ Conflict resolved: Local version is newer (local: {}, remote: {}), keeping local todo {}",
+                local_modified.to_rfc3339(),
+                remote_modified.to_rfc3339(),
+                existing.id
+            );
+            return Ok(());
+        }
     }
 
     let mut active: entity::ActiveModel = existing.clone().into();
@@ -463,13 +491,71 @@ async fn push_local_to_remote(
     let body = build_ical_from_model(&model);
     
     let upload = if let Some(href) = &model.remote_url {
-        client
+        // 第一次尝试：使用 ETag 进行乐观锁更新
+        let update_result = client
             .update_todo(href, &body, model.remote_etag.as_deref())
-            .await
+            .await;
+        
+        match update_result {
+            Ok(upload) => upload,
+            Err(err) => {
+                let err_msg = err.to_string();
+                let is_412 = err_msg.contains("412") || err_msg.contains("Precondition Failed");
+                
+                if is_412 {
+                    // 遇到 412 冲突，应用 Last-Write-Wins 策略
+                    eprintln!("⚠️  412 Conflict detected for todo {}, applying Last-Write-Wins strategy", model.id);
+                    
+                    // 获取远端最新版本
+                    let remote_todo = client
+                        .get_todo(href)
+                        .await
+                        .context("failed to fetch remote todo after 412 conflict")?;
+                    
+                    let local_modified = model.last_modified_at;
+                    let remote_modified = remote_todo.item.last_modified.unwrap_or(now);
+                    
+                    if local_modified > remote_modified {
+                        // 本地更新更晚，强制覆盖远端（不使用 ETag）
+                        eprintln!(
+                            "✓ Local version is newer (local: {}, remote: {}), force pushing todo {}",
+                            local_modified.to_rfc3339(),
+                            remote_modified.to_rfc3339(),
+                            model.id
+                        );
+                        client
+                            .update_todo(href, &body, None) // 不使用 ETag 强制更新
+                            .await
+                            .context("failed to force push local todo after 412")?
+                    } else {
+                        // 远端更新更晚，放弃推送，采用远端版本
+                        eprintln!(
+                            "⚠️  Remote version is newer (remote: {}, local: {}), discarding local changes for todo {}",
+                            remote_modified.to_rfc3339(),
+                            local_modified.to_rfc3339(),
+                            model.id
+                        );
+                        
+                        // 用远端版本覆盖本地
+                        let mut active: entity::ActiveModel = model.clone().into();
+                        apply_remote_to_active(&mut active, &remote_todo.item, &remote_todo, now, client);
+                        active
+                            .update(db)
+                            .await
+                            .context("failed to update local with remote after 412")?;
+                        
+                        return Ok(());
+                    }
+                } else {
+                    // 其他错误，直接返回
+                    return Err(err).with_context(|| format!("failed to upload todo {} to CalDAV", model.id));
+                }
+            }
+        }
     } else {
         client.create_todo(&model.uid, &body).await
-    }
-    .with_context(|| format!("failed to upload todo {} to CalDAV", model.id))?;
+            .with_context(|| format!("failed to create todo {} on CalDAV", model.id))?
+    };
 
     let mut active: entity::ActiveModel = model.into();
     active.dirty = Set(false);
