@@ -9,7 +9,8 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use super::{entity, models::Todo};
+use crate::features::todo::data::entity;
+use super::models::Todo;
 
 const DEFAULT_STATUS: &str = "NEEDS-ACTION";
 const COMPLETED_STATUS: &str = "COMPLETED";
@@ -109,10 +110,14 @@ pub async fn update_todo(
             active.status = Set(COMPLETED_STATUS.to_string());
             active.percent_complete = Set(Some(100));
             active.completed_at = Set(Some(now));
+            // 完成后清除提醒记录
+            active.reminder_last_triggered_at = Set(None);
         } else {
             active.status = Set(DEFAULT_STATUS.to_string());
             active.percent_complete = Set(Some(0));
             active.completed_at = Set(None);
+            // 取消完成时也清除提醒记录，允许重新提醒
+            active.reminder_last_triggered_at = Set(None);
         }
     }
 
@@ -175,6 +180,8 @@ pub async fn update_todo_details(
     if parsed_due != previous_due_date {
         active.due_date = Set(parsed_due);
         active.notified = Set(false);
+        // 清除提醒记录，因为提醒时间可能变化
+        active.reminder_last_triggered_at = Set(None);
     }
 
     active.recurrence_rule = Set(recurrence_rule);
@@ -183,6 +190,8 @@ pub async fn update_todo_details(
         if minutes != previous_reminder_offset {
             active.reminder_offset_minutes = Set(minutes);
             active.notified = Set(false);
+            // 清除提醒记录，因为提醒时间变化了
+            active.reminder_last_triggered_at = Set(None);
         }
     }
 
@@ -234,24 +243,74 @@ pub async fn delete_todo(db: &DatabaseConnection, id: i32) -> Result<()> {
     Ok(())
 }
 
-pub async fn get_next_due_todo(db: &DatabaseConnection) -> Result<Option<entity::Model>> {
-    let now = Utc::now();
-
-    let todo = entity::Entity::find()
+/// 获取下一个需要提醒的 Todo（用于调度器）
+/// 
+/// 查询条件：
+/// - 未删除
+/// - 未完成
+/// - 有 due_date
+/// - reminder_last_triggered_at 为空（未提醒过）
+/// 
+/// 排序：按 (due_date - reminder_offset_minutes) 升序，即最早需要提醒的在前
+pub async fn get_next_reminder_todo(db: &DatabaseConnection) -> Result<Option<entity::Model>> {
+    // 不在数据库层过滤 reminder_last_triggered_at，因为可能是空字符串或 NULL
+    let todos = entity::Entity::find()
         .filter(entity::Column::DeletedAt.is_null())
         .filter(entity::Column::Completed.eq(false))
         .filter(entity::Column::DueDate.is_not_null())
-        .filter(entity::Column::DueDate.gt(now))
-        .filter(entity::Column::Notified.eq(false))
-        .order_by_asc(entity::Column::DueDate)
-        .one(db)
+        .all(db)
         .await
-        .context("failed to query next due todo")?;
-
-    Ok(todo)
+        .context("failed to query todos with reminders")?;
+    
+    println!("[Service] 查询到 {} 个未完成且有 due_date 的 Todo", todos.len());
+    
+    // 在内存中计算提醒时间并排序（因为 SQL 无法直接计算时间差）
+    let mut todos_with_reminder_time: Vec<_> = todos
+        .into_iter()
+        .filter_map(|todo| {
+            println!("[Service] Todo#{}: title=\"{}\", due_date={:?}, offset={}, reminder_last_triggered_at={:?}", 
+                todo.id, todo.title, todo.due_date, todo.reminder_offset_minutes, todo.reminder_last_triggered_at);
+            
+            // 过滤掉已经提醒过的（reminder_last_triggered_at 不为空）
+            if todo.reminder_last_triggered_at.is_some() {
+                println!("[Service]   -> 已提醒过，跳过");
+                return None;
+            }
+            
+            let due_date = todo.due_date?;
+            let offset = todo.reminder_offset_minutes;
+            let reminder_time = due_date - chrono::Duration::minutes(offset as i64);
+            
+            println!("[Service]   -> 计算出的提醒时间: {}", reminder_time.format("%Y-%m-%d %H:%M:%S"));
+            
+            Some((todo, reminder_time))
+        })
+        .collect();
+    
+    println!("[Service] 有 {} 个 Todo 可以计算出提醒时间", todos_with_reminder_time.len());
+    
+    // 按提醒时间排序
+    todos_with_reminder_time.sort_by_key(|(_, time)| *time);
+    
+    let result = todos_with_reminder_time.into_iter().next().map(|(todo, _)| todo);
+    if let Some(ref todo) = result {
+        println!("[Service] 选中的下一个提醒 Todo: #{} \"{}\"", todo.id, todo.title);
+    }
+    
+    Ok(result)
 }
 
-pub async fn mark_todo_notified(db: &DatabaseConnection, id: i32) -> Result<()> {
+/// 根据 ID 获取 Todo（用于调度器发送提醒）
+pub async fn get_todo_by_id(db: &DatabaseConnection, id: i32) -> Result<entity::Model> {
+    entity::Entity::find_by_id(id)
+        .one(db)
+        .await
+        .with_context(|| format!("failed to load todo {id}"))?
+        .ok_or_else(|| anyhow!("todo {id} not found"))
+}
+
+/// 标记 Todo 为已提醒（用于调度器）
+pub async fn mark_todo_reminded(db: &DatabaseConnection, id: i32) -> Result<()> {
     let model = entity::Entity::find_by_id(id)
         .one(db)
         .await
@@ -259,13 +318,12 @@ pub async fn mark_todo_notified(db: &DatabaseConnection, id: i32) -> Result<()> 
         .ok_or_else(|| anyhow!("todo {id} not found"))?;
 
     let mut active: entity::ActiveModel = model.into();
-    active.notified = Set(true);
     active.reminder_last_triggered_at = Set(Some(Utc::now()));
 
     active
         .update(db)
         .await
-        .with_context(|| format!("failed to mark todo {id} as notified"))?;
+        .with_context(|| format!("failed to mark todo {id} as reminded"))?;
 
     Ok(())
 }

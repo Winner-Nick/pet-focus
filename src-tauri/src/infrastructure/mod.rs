@@ -6,6 +6,3 @@ pub mod tray;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod webserver;
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub mod window;

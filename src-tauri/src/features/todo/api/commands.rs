@@ -2,7 +2,7 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::core::AppState;
-use super::{models::Todo, service};
+use crate::features::todo::core::{models::Todo, service};
 
 #[derive(Debug, Default, Deserialize)]
 pub struct CreateTodoPayload {
@@ -55,6 +55,11 @@ pub async fn create_todo(
     // TODO: 发送 todo 变更通知
     // state.notify_todo_change("created", Some(result.id)).await;
 
+    // 触发调度器重新规划提醒
+    if let Some(scheduler) = state.todo_scheduler() {
+        scheduler.reschedule().await;
+    }
+
     Ok(result)
 }
 
@@ -71,6 +76,11 @@ pub async fn update_todo(
     // TODO: 发送 todo 变更通知
     // state.notify_todo_change("updated", Some(payload.id)).await;
 
+    // 触发调度器重新规划提醒
+    if let Some(scheduler) = state.todo_scheduler() {
+        scheduler.reschedule().await;
+    }
+
     Ok(result)
 }
 
@@ -83,6 +93,11 @@ pub async fn delete_todo(state: State<'_, AppState>, id: i32) -> Result<(), Stri
 
     // TODO: 发送 todo 变更通知
     // state.notify_todo_change("deleted", Some(id)).await;
+
+    // 触发调度器重新规划提醒
+    if let Some(scheduler) = state.todo_scheduler() {
+        scheduler.reschedule().await;
+    }
 
     Ok(())
 }
@@ -112,6 +127,11 @@ pub async fn update_todo_details(
 
     // TODO: 发送 todo 变更通知
     // state.notify_todo_change("updated", Some(payload.id)).await;
+
+    // 触发调度器重新规划提醒（因为可能修改了提醒相关字段）
+    if let Some(scheduler) = state.todo_scheduler() {
+        scheduler.reschedule().await;
+    }
 
     Ok(result)
 }

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 
-use crate::features::settings::service::SettingService;
+use crate::features::settings::core::service::SettingService;
 
 const CONFIG_KEY: &str = "caldav.config";
 const LAST_SYNC_KEY: &str = "caldav.last_sync";

@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::core::AppState;
-use super::service::SettingService;
+use crate::features::settings::core::service::SettingService;
 
 #[derive(Debug, serde::Serialize)]
 pub struct ThemePreference {

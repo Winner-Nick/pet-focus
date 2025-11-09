@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -7,7 +8,8 @@ use sea_orm_migration::MigrationTrait;
 use crate::core::{AppState, Feature};
 use crate::infrastructure::database::DatabaseRegistry;
 
-use super::migration;
+use super::data::migration;
+use super::core::scheduler::DueNotificationScheduler;
 
 /// Todo Feature
 /// 
@@ -15,16 +17,30 @@ use super::migration;
 /// - 数据库 Entity 和 Migration
 /// - CRUD Commands
 /// - CalDAV 同步
-pub struct TodoFeature;
+/// - 到期提醒调度
+pub struct TodoFeature {
+    scheduler: OnceCell<Arc<DueNotificationScheduler>>,
+}
 
 impl TodoFeature {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self)
+        Arc::new(Self {
+            scheduler: OnceCell::new(),
+        })
+    }
+    
+    /// 获取调度器（仅在初始化后可用）
+    pub fn scheduler(&self) -> Option<&Arc<DueNotificationScheduler>> {
+        self.scheduler.get()
     }
 }
 
 #[async_trait]
 impl Feature for TodoFeature {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
     fn name(&self) -> &'static str {
         "todo"
     }
@@ -54,8 +70,8 @@ impl Feature for TodoFeature {
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn register_api_routes(&self, _registry: &mut crate::infrastructure::webserver::ApiRegistry) {
-        // TODO: 注册 WebServer API 路由
+    fn register_ws_handlers(&self, registry: &mut crate::infrastructure::webserver::HandlerRegistry) {
+        super::api::handlers::register_handlers(registry);
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -63,9 +79,21 @@ impl Feature for TodoFeature {
         // TODO: 注册托盘菜单项（如"新建待办"）
     }
 
-    async fn initialize(&self, _app_state: &AppState) -> Result<()> {
-        // TODO: 启动 CalDAV 同步管理器
-        println!("[TodoFeature] Initialized");
+    async fn initialize(&self, app_state: &AppState) -> Result<()> {
+        // 创建到期通知调度器
+        let scheduler = Arc::new(DueNotificationScheduler::new(
+            app_state.db().clone(),
+            Arc::new(app_state.notification().clone()),
+        ));
+        
+        // 保存到 Feature 中
+        self.scheduler.set(scheduler.clone())
+            .map_err(|_| anyhow::anyhow!("Scheduler already initialized"))?;
+        
+        // 触发首次调度
+        scheduler.reschedule().await;
+        
+        println!("[TodoFeature] Initialized with due notification scheduler");
         Ok(())
     }
 
@@ -77,6 +105,8 @@ impl Feature for TodoFeature {
 
 impl Default for TodoFeature {
     fn default() -> Self {
-        Self
+        Self {
+            scheduler: OnceCell::new(),
+        }
     }
 }

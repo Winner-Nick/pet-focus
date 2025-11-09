@@ -8,10 +8,10 @@ use sea_orm::{
 };
 use serde::Serialize;
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Wry};
+use tauri::{AppHandle, Manager, Wry};
 use tokio::sync::Mutex;
 
-use crate::features::todo;
+use crate::features::todo::data::entity;
 
 use super::{
     client::{CalDavClient, CalDavItem, RemoteTodo},
@@ -195,17 +195,47 @@ impl CalDavSyncManager {
     }
 
     fn emit_event(&self, event: &CalDavSyncEvent) {
+        use tauri::Emitter;
+        
+        // 发送 CalDAV sync 事件（直接使用 Tauri Event）
         if let Err(err) = self.inner.app_handle.emit(SYNC_EVENT, event) {
             eprintln!("failed to emit CalDAV sync event: {err}");
         }
         
         // 额外通知前端：告知待办数据已变更，以便前端立即刷新列表
-        // 标记为来自 "webserver" 以区分本地直接操作（前端会据此决定是否显示通知）
         if let Err(err) = self.inner.app_handle.emit(
             "todo-data-updated",
-            json!({ "action": serde_json::Value::Null, "todoId": serde_json::Value::Null, "source": "webserver" }),
+            json!({ "action": serde_json::Value::Null, "todoId": serde_json::Value::Null, "source": "caldav" }),
         ) {
             eprintln!("failed to emit todo-data-updated event: {err}");
+        }
+        
+        // Toast 通知 (用户界面) & 触发调度器重新规划
+        if let Some(state) = self.inner.app_handle.try_state::<crate::core::AppState>() {
+            match &event.outcome {
+                SyncOutcome::Success { created, updated, pushed, .. } => {
+                    crate::features::todo::api::notifications::notify_sync_success(
+                        state.notification(),
+                        *created,
+                        *updated,
+                        *pushed
+                    );
+                    
+                    // CalDAV 同步可能修改了待办的提醒时间，需要重新规划
+                    if let Some(scheduler) = state.todo_scheduler() {
+                        let scheduler = scheduler.clone();
+                        tauri::async_runtime::spawn(async move {
+                            scheduler.reschedule().await;
+                        });
+                    }
+                }
+                SyncOutcome::Error { message } => {
+                    crate::features::todo::api::notifications::notify_sync_error(state.notification(), message);
+                }
+                SyncOutcome::Skipped { .. } => {
+                    // 跳过时不显示通知
+                }
+            }
         }
     }
 }
@@ -226,9 +256,9 @@ async fn synchronize_database(
     
     let remote_todos = client.fetch_todos().await?;
 
-    let mut local_models = super::super::entity::Entity::find().all(db).await?;
-    let mut by_href: HashMap<String, super::super::entity::Model> = HashMap::new();
-    let mut by_uid: HashMap<String, super::super::entity::Model> = HashMap::new();
+    let mut local_models = entity::Entity::find().all(db).await?;
+    let mut by_href: HashMap<String, entity::Model> = HashMap::new();
+    let mut by_uid: HashMap<String, entity::Model> = HashMap::new();
 
     for model in local_models.drain(..) {
         if let Some(href) = model.remote_url.clone() {
@@ -260,8 +290,8 @@ async fn synchronize_database(
     let mut pushed = 0usize;
     let mut deleted = 0usize;
 
-    let dirty_locals = super::super::entity::Entity::find()
-        .filter(super::super::entity::Column::Dirty.eq(true))
+    let dirty_locals = entity::Entity::find()
+        .filter(entity::Column::Dirty.eq(true))
         .all(db)
         .await?;
 
@@ -287,7 +317,7 @@ async fn synchronize_database(
         // 如果本地有 remote_url 但远端已不存在，且未被标记删除
         if local_model.deleted_at.is_none() && !remote_hrefs.contains(&href) {
             // 远端已删除，删除本地记录
-            super::super::entity::Entity::delete_by_id(local_model.id)
+            entity::Entity::delete_by_id(local_model.id)
                 .exec(db)
                 .await
                 .with_context(|| {
@@ -311,7 +341,7 @@ async fn synchronize_database(
 
 async fn update_local_from_remote(
     db: &DatabaseConnection,
-    existing: super::super::entity::Model,
+    existing: entity::Model,
     remote: &RemoteTodo,
     now: DateTime<Utc>,
     client: &CalDavClient,
@@ -326,7 +356,7 @@ async fn update_local_from_remote(
         return Ok(());
     }
 
-    let mut active: super::super::entity::ActiveModel = existing.clone().into();
+    let mut active: entity::ActiveModel = existing.clone().into();
     apply_remote_to_active(&mut active, &remote.item, remote, now, client);
 
     active
@@ -345,7 +375,7 @@ async fn create_local_from_remote(
 ) -> Result<()> {
     use sea_orm::ActiveValue::NotSet;
 
-    let mut active = super::super::entity::ActiveModel {
+    let mut active = entity::ActiveModel {
         id: NotSet,
         ..Default::default()
     };
@@ -367,7 +397,7 @@ async fn create_local_from_remote(
 async fn delete_remote_todo(
     db: &DatabaseConnection,
     client: &CalDavClient,
-    model: super::super::entity::Model,
+    model: entity::Model,
 ) -> Result<()> {
     // 如果有远端URL，则尝试删除远端资源
     if let Some(href) = &model.remote_url {
@@ -414,7 +444,7 @@ async fn delete_remote_todo(
     }
 
     // 从本地数据库彻底删除
-    super::super::entity::Entity::delete_by_id(model.id)
+    entity::Entity::delete_by_id(model.id)
         .exec(db)
         .await
         .with_context(|| format!("failed to delete todo {} from local database", model.id))?;
@@ -427,7 +457,7 @@ async fn delete_remote_todo(
 async fn push_local_to_remote(
     db: &DatabaseConnection,
     client: &CalDavClient,
-    model: super::super::entity::Model,
+    model: entity::Model,
     now: DateTime<Utc>,
 ) -> Result<()> {
     let body = build_ical_from_model(&model);
@@ -441,7 +471,7 @@ async fn push_local_to_remote(
     }
     .with_context(|| format!("failed to upload todo {} to CalDAV", model.id))?;
 
-    let mut active: super::super::entity::ActiveModel = model.into();
+    let mut active: entity::ActiveModel = model.into();
     active.dirty = Set(false);
     active.remote_url = Set(Some(upload.href.clone()));
     active.remote_calendar_url = Set(Some(client.calendar_url().to_string()));
@@ -459,7 +489,7 @@ async fn push_local_to_remote(
 }
 
 fn apply_remote_to_active(
-    active: &mut super::super::entity::ActiveModel,
+    active: &mut entity::ActiveModel,
     item: &CalDavItem,
     remote: &RemoteTodo,
     now: DateTime<Utc>,
@@ -550,7 +580,7 @@ fn serialize_tags(tags: &[String]) -> Option<String> {
     }
 }
 
-fn build_ical_from_model(model: &super::super::entity::Model) -> String {
+fn build_ical_from_model(model: &entity::Model) -> String {
     let mut lines = Vec::<String>::new();
     let stamp = Utc::now();
 

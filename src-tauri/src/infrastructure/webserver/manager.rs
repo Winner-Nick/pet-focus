@@ -18,12 +18,10 @@ use tokio::{
 };
 
 use crate::infrastructure::webserver::{
-    channels::PLACEHOLDER_CHANNEL,
     connection::ConnectionManager,
     context::ApiContext,
-    message::WsMessage,
+    registry::HandlerRegistry,
     router::build_router,
-    scheduler::DueNotificationScheduler,
     types::{WebServerConfig, WebServerStatus},
 };
 
@@ -31,6 +29,7 @@ use crate::infrastructure::webserver::{
 pub struct WebServerManager {
     inner: Arc<Mutex<Option<WebServerHandle>>>,
     default_config: Arc<WebServerConfig>,
+    registry: Arc<Mutex<HandlerRegistry>>,
 }
 
 impl WebServerManager {
@@ -38,7 +37,13 @@ impl WebServerManager {
         Self {
             inner: Arc::new(Mutex::new(None)),
             default_config: Arc::new(WebServerConfig::default()),
+            registry: Arc::new(Mutex::new(HandlerRegistry::new())),
         }
+    }
+
+    /// 获取 HandlerRegistry 的可变引用（用于 Feature 注册 handlers）
+    pub async fn registry_mut(&self) -> tokio::sync::MutexGuard<'_, HandlerRegistry> {
+        self.registry.lock().await
     }
 
     pub async fn start(
@@ -70,30 +75,17 @@ impl WebServerManager {
         // 创建连接管理器
         let conn_mgr = ConnectionManager::new();
 
-        // 创建并启动到期通知调度器
-        let scheduler = DueNotificationScheduler::new(db.clone(), conn_mgr.clone());
-        scheduler.reschedule().await;
+        // 创建 API 上下文
+        let ctx = ApiContext::new(db, app_handle, conn_mgr.clone());
 
-        // 将 scheduler 包装在 Arc<Mutex> 中以便共享
-        let scheduler_shared = Arc::new(Mutex::new(Some(scheduler.clone())));
+        // 获取 registry 的克隆
+        let registry = self.registry.lock().await.clone();
+        
+        // 保存 connection_manager 引用以便其他模块使用
+        let conn_mgr_for_handle = conn_mgr.clone();
 
-        // 启动定时广播任务
-        let conn_mgr_clone = conn_mgr.clone();
-        let broadcast_task: JoinHandle<()> = async_runtime::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
-            loop {
-                interval.tick().await;
-                let event = WsMessage::event(
-                    PLACEHOLDER_CHANNEL.to_string(),
-                    serde_json::json!({"timestamp": chrono::Utc::now().to_rfc3339()}),
-                );
-                conn_mgr_clone
-                    .broadcast_to_channel(&PLACEHOLDER_CHANNEL.to_string(), event)
-                    .await;
-            }
-        });
-
-        let router = build_router(ApiContext::new(db, app_handle, conn_mgr, scheduler_shared));
+        // 构建 router
+        let router = build_router(ctx, registry);
         let server = axum::serve(listener, router).with_graceful_shutdown(async move {
             let _ = shutdown_rx.await;
         });
@@ -112,13 +104,18 @@ impl WebServerManager {
         *guard = Some(WebServerHandle {
             shutdown: Some(shutdown_tx),
             join,
-            broadcast_task,
-            scheduler,
             addr: actual_addr,
             alive: alive_flag,
+            connection_manager: conn_mgr_for_handle,
         });
 
         Ok(WebServerStatus::running(actual_addr))
+    }
+    
+    /// 获取 ConnectionManager（如果 WebServer 正在运行）
+    pub fn get_connection_manager(&self) -> Option<ConnectionManager> {
+        let guard = self.inner.try_lock().ok()?;
+        guard.as_ref().map(|handle| handle.connection_manager.clone())
     }
 
     pub async fn stop(&self) -> Result<WebServerStatus> {
@@ -128,14 +125,9 @@ impl WebServerManager {
         };
 
         if let Some(mut handle) = handle {
-            // 停止调度器
-            handle.scheduler.stop().await;
-
             if let Some(shutdown) = handle.shutdown.take() {
                 let _ = shutdown.send(());
             }
-
-            handle.broadcast_task.abort();
 
             if let Err(error) = handle.join.await {
                 eprintln!("failed to join web server task: {error}");
@@ -157,23 +149,14 @@ impl WebServerManager {
             .map(|handle| WebServerStatus::running(handle.addr))
             .unwrap_or_else(WebServerStatus::stopped)
     }
-
-    /// 触发调度器重新调度（当 todo 更新时调用）
-    pub async fn reschedule_notifications(&self) {
-        let guard = self.inner.lock().await;
-        if let Some(handle) = guard.as_ref() {
-            handle.scheduler.reschedule().await;
-        }
-    }
 }
 
 struct WebServerHandle {
     shutdown: Option<oneshot::Sender<()>>,
     join: JoinHandle<()>,
-    broadcast_task: JoinHandle<()>,
-    scheduler: DueNotificationScheduler,
     addr: SocketAddr,
     alive: Arc<AtomicBool>,
+    connection_manager: ConnectionManager,
 }
 
 impl WebServerHandle {

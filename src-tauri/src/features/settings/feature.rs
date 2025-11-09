@@ -7,7 +7,7 @@ use sea_orm_migration::MigrationTrait;
 use crate::core::{AppState, Feature};
 use crate::infrastructure::database::DatabaseRegistry;
 
-use super::migration;
+use super::data::migration;
 
 pub struct SettingsFeature;
 
@@ -19,6 +19,10 @@ impl SettingsFeature {
 
 #[async_trait]
 impl Feature for SettingsFeature {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
     fn name(&self) -> &'static str {
         "settings"
     }

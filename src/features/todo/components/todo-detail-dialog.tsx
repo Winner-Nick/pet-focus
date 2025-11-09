@@ -135,7 +135,7 @@ export function TodoDetailDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="bg-card text-card-foreground max-h-[calc(100vh-2rem)] max-w-[calc(100%-2rem)] overflow-hidden p-0 sm:max-h-[calc(100vh-4rem)] sm:max-w-2xl md:max-w-[calc(100%-4rem)] lg:max-w-3xl">
         <div className="flex h-full max-h-[calc(100vh-2rem)] flex-col sm:max-h-[calc(100vh-4rem)]">
-          <DialogHeader className="px-6 pt-6 flex-shrink-0">
+          <DialogHeader className="px-6 pt-6 shrink-0">
             <DialogTitle>编辑待办详情</DialogTitle>
           </DialogHeader>
 
@@ -275,7 +275,7 @@ export function TodoDetailDialog({
             </div>
           )}
 
-          <DialogFooter className="border-t px-6 py-4 flex-shrink-0">
+          <DialogFooter className="border-t px-6 py-4 shrink-0">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               取消
             </Button>

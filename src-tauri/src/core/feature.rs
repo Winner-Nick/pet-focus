@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -6,16 +8,18 @@ use crate::infrastructure::database::DatabaseRegistry;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::infrastructure::tray::TrayRegistry;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-use crate::infrastructure::webserver::ApiRegistry;
+use crate::infrastructure::webserver::HandlerRegistry;
 
 /// Feature trait - 所有业务功能模块必须实现此 trait
 /// 
 /// 每个 Feature 负责：
-/// 1. 向基础设施注册自己的组件（数据库实体、API 路由、托盘菜单等）
+/// 1. 向基础设施注册自己的组件（数据库实体、WS Handlers、托盘菜单等）
 /// 2. 提供自己的 Tauri Commands
 /// 3. 实现初始化逻辑
 #[async_trait]
 pub trait Feature: Send + Sync {
+    /// 支持向下转型（用于访问具体 Feature 的特殊方法）
+    fn as_any(&self) -> &dyn Any;
     /// Feature 名称（用于日志和调试）
     fn name(&self) -> &'static str;
 
@@ -33,10 +37,10 @@ pub trait Feature: Send + Sync {
         vec![]
     }
 
-    /// 注册 WebServer API 路由（仅桌面平台）
+    /// 注册 WebSocket Call-Reply Handlers（仅桌面平台）
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn register_api_routes(&self, _registry: &mut ApiRegistry) {
-        // 默认实现：不注册任何 API 路由
+    fn register_ws_handlers(&self, _registry: &mut HandlerRegistry) {
+        // 默认实现：不注册任何 WS Handlers
     }
 
     /// 注册托盘菜单项（仅桌面平台）

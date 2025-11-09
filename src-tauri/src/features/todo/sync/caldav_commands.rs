@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::core::AppState;
-use super::sync::{CalDavConfig, CalDavConfigService, CalDavSyncEvent};
+use super::{CalDavConfig, CalDavConfigService, CalDavSyncEvent};
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateCalDavConfigPayload {
@@ -98,7 +98,7 @@ pub async fn clear_caldav_config(state: State<'_, AppState>) -> Result<CalDavSta
         .map_err(|e| e.to_string())?;
 
     // 清理所有待删除的 todo
-    super::service::cleanup_pending_deletes(state.db())
+    crate::features::todo::core::service::cleanup_pending_deletes(state.db())
         .await
         .map_err(|e| e.to_string())?;
 

@@ -2,7 +2,7 @@ use tauri::{Emitter, State};
 
 use crate::core::AppState;
 use crate::infrastructure::webserver::types::WebServerStatus;
-use crate::features::settings::service::SettingService;
+use crate::features::settings::core::service::SettingService;
 
 const WEBSERVER_STATUS_CHANGED_EVENT: &str = "webserver-status-changed";
 
@@ -14,22 +14,32 @@ pub async fn start_web_server(
     let result = state
         .webserver_manager()
         .start(state.db().clone(), state.app_handle(), None)
-        .await
-        .map_err(|e| e.to_string());
+        .await;
 
-    if result.is_ok() {
-        // 保存设置
-        let _ = SettingService::set_bool(state.db(), "webserver.auto_start", true).await;
+    match &result {
+        Ok(status) => {
+            // 保存设置
+            let _ = SettingService::set_bool(state.db(), "webserver.auto_start", true).await;
 
-        // 通知前端状态变化
-        let _ = state.app_handle().emit(WEBSERVER_STATUS_CHANGED_EVENT, true);
-        
-        // 更新托盘菜单
-        use crate::infrastructure::tray::TrayManager;
-        let _ = TrayManager::update_menu(&state.app_handle(), true);
+            // 通知前端状态变化（直接使用 Tauri Event）
+            let _ = state.app_handle().emit(WEBSERVER_STATUS_CHANGED_EVENT, true);
+            
+            // 更新托盘菜单
+            use crate::infrastructure::tray::TrayManager;
+            let _ = TrayManager::update_menu(&state.app_handle(), true);
+            
+            // Toast 通知
+            if let Some(port) = status.port {
+                super::notifications::notify_server_started(state.notification(), port);
+            }
+        }
+        Err(e) => {
+            // Toast 通知
+            super::notifications::notify_server_start_failed(state.notification(), &e.to_string());
+        }
     }
 
-    result
+    result.map_err(|e| e.to_string())
 }
 
 /// 停止 WebServer
@@ -40,22 +50,30 @@ pub async fn stop_web_server(
     let result = state
         .webserver_manager()
         .stop()
-        .await
-        .map_err(|e| e.to_string());
+        .await;
 
-    if result.is_ok() {
-        // 保存设置
-        let _ = SettingService::set_bool(state.db(), "webserver.auto_start", false).await;
+    match &result {
+        Ok(_) => {
+            // 保存设置
+            let _ = SettingService::set_bool(state.db(), "webserver.auto_start", false).await;
 
-        // 通知前端状态变化
-        let _ = state.app_handle().emit(WEBSERVER_STATUS_CHANGED_EVENT, false);
-        
-        // 更新托盘菜单
-        use crate::infrastructure::tray::TrayManager;
-        let _ = TrayManager::update_menu(&state.app_handle(), false);
+            // 通知前端状态变化（直接使用 Tauri Event）
+            let _ = state.app_handle().emit(WEBSERVER_STATUS_CHANGED_EVENT, false);
+            
+            // 更新托盘菜单
+            use crate::infrastructure::tray::TrayManager;
+            let _ = TrayManager::update_menu(&state.app_handle(), false);
+            
+            // Toast 通知
+            super::notifications::notify_server_stopped(state.notification());
+        }
+        Err(e) => {
+            // Toast 通知
+            super::notifications::notify_server_stop_failed(state.notification(), &e.to_string());
+        }
     }
 
-    result
+    result.map_err(|e| e.to_string())
 }
 
 /// 获取 WebServer 状态

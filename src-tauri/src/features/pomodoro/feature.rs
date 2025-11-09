@@ -19,6 +19,10 @@ impl PomodoroFeature {
 
 #[async_trait]
 impl Feature for PomodoroFeature {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
     fn name(&self) -> &'static str {
         "pomodoro"
     }

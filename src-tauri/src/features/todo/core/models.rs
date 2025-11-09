@@ -1,4 +1,4 @@
-use super::entity;
+use crate::features::todo::data::entity;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

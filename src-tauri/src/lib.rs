@@ -8,8 +8,8 @@ pub use core::AppState;
 
 // 重新导出旧的 entities（向后兼容）
 pub mod entities {
-    pub use crate::features::todo::entity as todo;
-    pub use crate::features::settings::entity as setting;
+    pub use crate::features::todo::data::entity as todo;
+    pub use crate::features::settings::data::entity as setting;
 
     pub mod prelude {
         pub use super::todo::Entity as Todo;
@@ -20,10 +20,10 @@ pub mod entities {
 // 重新导出 models（API 响应模型）
 pub mod models {
     pub mod todo {
-        pub use crate::features::todo::models::*;
+        pub use crate::features::todo::core::models::*;
     }
     pub mod setting {
-        pub use crate::features::settings::models::*;
+        pub use crate::features::settings::core::models::*;
     }
 }
 
@@ -31,13 +31,14 @@ use std::sync::Arc;
 use tauri::Manager;
 use core::Feature;
 use infrastructure::database::{init_db, DatabaseRegistry};
-use features::{todo::TodoFeature, settings::SettingsFeature};
+use features::{todo::TodoFeature, settings::SettingsFeature, window::WindowFeature};
 
 /// 初始化所有 Features
 fn init_features() -> Vec<Arc<dyn Feature>> {
     vec![
         TodoFeature::new(),
         SettingsFeature::new(),
+        Arc::new(WindowFeature::new()),
     ]
 }
 
@@ -67,6 +68,15 @@ pub fn run() {
             // 创建 AppState
             let state = AppState::new(handle.clone(), db, features.clone());
 
+            // 注册 WebSocket Handlers（仅桌面平台）
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            {
+                let mut registry = tauri::async_runtime::block_on(state.webserver_manager().registry_mut());
+                for feature in &features {
+                    feature.register_ws_handlers(&mut registry);
+                }
+            }
+
             // 初始化所有 Features
             for feature in &features {
                 tauri::async_runtime::block_on(feature.initialize(&state))
@@ -88,7 +98,7 @@ pub fn run() {
                     let app_handle = handle.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Some(state) = app_handle.try_state::<AppState>() {
-                            use crate::features::settings::service::SettingService;
+                            use crate::features::settings::core::service::SettingService;
                             
                             match SettingService::get_bool(state.db(), "webserver.auto_start", false).await {
                                 Ok(true) => {
@@ -116,32 +126,32 @@ pub fn run() {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 #[cfg(not(any(target_os = "android", target_os = "ios")))]
                 {
-                    use crate::infrastructure::window;
+                    use crate::features::window::manager;
                     // 阻止窗口关闭，改为隐藏
                     api.prevent_close();
                     // 隐藏窗口并在 macOS 上隐藏 Dock 图标
-                    let _ = window::hide_main_window(&window.app_handle());
+                    let _ = manager::hide_main_window(&window.app_handle());
                 }
             }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             // Todo Feature Commands
-            features::todo::commands::list_todos,
-            features::todo::commands::create_todo,
-            features::todo::commands::update_todo,
-            features::todo::commands::delete_todo,
-            features::todo::commands::update_todo_details,
+            features::todo::api::commands::list_todos,
+            features::todo::api::commands::create_todo,
+            features::todo::api::commands::update_todo,
+            features::todo::api::commands::delete_todo,
+            features::todo::api::commands::update_todo_details,
             
             // CalDAV Commands
-            features::todo::caldav_commands::get_caldav_status,
-            features::todo::caldav_commands::save_caldav_config,
-            features::todo::caldav_commands::clear_caldav_config,
-            features::todo::caldav_commands::sync_caldav_now,
+            features::todo::sync::caldav_commands::get_caldav_status,
+            features::todo::sync::caldav_commands::save_caldav_config,
+            features::todo::sync::caldav_commands::clear_caldav_config,
+            features::todo::sync::caldav_commands::sync_caldav_now,
             
             // Settings Feature Commands
-            features::settings::commands::get_theme_preference,
-            features::settings::commands::set_theme_preference,
+            features::settings::api::commands::get_theme_preference,
+            features::settings::api::commands::set_theme_preference,
             
             // WebServer Commands (Desktop only)
             #[cfg(not(any(target_os = "android", target_os = "ios")))]

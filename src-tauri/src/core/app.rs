@@ -7,6 +7,7 @@ use tauri::{AppHandle, Wry};
 use crate::core::Feature;
 use crate::features::todo::sync::CalDavSyncManager;
 use crate::infrastructure::webserver::WebServerManager;
+use crate::infrastructure::notification::NotificationManager;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::infrastructure::tray::TrayManager;
 
@@ -17,6 +18,9 @@ pub struct AppState {
     app_handle: AppHandle<Wry>,
     db: DatabaseConnection,
     features: HashMap<&'static str, Arc<dyn Feature>>,
+    
+    // 通知管理器
+    notification_manager: NotificationManager,
     
     // CalDAV 同步管理器
     caldav_sync_manager: CalDavSyncManager,
@@ -41,6 +45,9 @@ impl AppState {
             feature_map.insert(feature.name(), feature);
         }
 
+        // 创建通知管理器
+        let notification_manager = NotificationManager::new(app_handle.clone());
+        
         // 创建 CalDAV 同步管理器
         let caldav_sync_manager = CalDavSyncManager::new(db.clone(), app_handle.clone());
 
@@ -48,6 +55,7 @@ impl AppState {
             app_handle,
             db,
             features: feature_map,
+            notification_manager,
             caldav_sync_manager,
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             webserver_manager: WebServerManager::new(),
@@ -76,6 +84,11 @@ impl AppState {
         &self.features
     }
 
+    /// 获取通知管理器
+    pub fn notification(&self) -> &NotificationManager {
+        &self.notification_manager
+    }
+
     /// 获取 CalDAV 同步管理器
     pub fn caldav_sync_manager(&self) -> &CalDavSyncManager {
         &self.caldav_sync_manager
@@ -91,5 +104,14 @@ impl AppState {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn tray_manager(&self) -> &TrayManager {
         &self.tray_manager
+    }
+    
+    /// 获取 Todo Feature 的调度器
+    pub fn todo_scheduler(&self) -> Option<&Arc<crate::features::todo::DueNotificationScheduler>> {
+        use crate::features::todo::TodoFeature;
+        
+        self.get_feature("todo")
+            .and_then(|feature| feature.as_any().downcast_ref::<TodoFeature>())
+            .and_then(|todo_feature| todo_feature.scheduler())
     }
 }

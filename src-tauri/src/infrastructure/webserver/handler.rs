@@ -1,33 +1,31 @@
-use sea_orm::DatabaseConnection;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::infrastructure::webserver::{
     connection::{ConnectionId, ConnectionManager},
     context::ApiContext,
     message::{CallBody, WsMessage},
+    registry::HandlerRegistry,
 };
-use crate::features::todo::service as todo;
-use crate::infrastructure::window;
 
 /// 处理 Call 请求
+/// 
+/// 根据 method 在 HandlerRegistry 中查找对应的 handler 并执行
 pub async fn handle_call(
     conn_id: &ConnectionId,
     call: CallBody,
-    db: &DatabaseConnection,
+    registry: &HandlerRegistry,
     conn_mgr: &ConnectionManager,
     ctx: &ApiContext,
 ) {
     let CallBody { id, method, params } = call;
 
-    let result = match method.as_str() {
-        "list_todos" => handle_list_todos(db).await,
-        "get_todo" => handle_get_todo(db, params).await,
-        "create_todo" => handle_create_todo(db, params, ctx).await,
-        "update_todo" => handle_update_todo(db, params, ctx).await,
-        "delete_todo" => handle_delete_todo(db, params, ctx).await,
-        "update_todo_details" => handle_update_todo_details(db, params, ctx).await,
-        "wake_window" => handle_wake_window(ctx).await,
-        _ => Err(format!("Unknown method: {}", method)),
+    let result = if let Some(handler) = registry.get(&method) {
+        // 执行注册的 handler
+        handler(method.clone(), params.unwrap_or(Value::Null), ctx.clone())
+            .await
+            .map_err(|e| e.to_string())
+    } else {
+        Err(format!("Unknown method: {}", method))
     };
 
     let reply = match result {
@@ -40,196 +38,3 @@ pub async fn handle_call(
     }
 }
 
-/// 列出所有待办
-async fn handle_list_todos(db: &DatabaseConnection) -> Result<Value, String> {
-    let todos = todo::list_todos(db).await.map_err(|e| e.to_string())?;
-
-    Ok(json!(todos))
-}
-
-/// 获取单个待办
-async fn handle_get_todo(db: &DatabaseConnection, params: Option<Value>) -> Result<Value, String> {
-    let params = params.ok_or("Missing params")?;
-
-    let id = params
-        .get("id")
-        .and_then(|v| v.as_i64())
-        .ok_or("Missing or invalid id")? as i32;
-
-    let todo = todo::get_todo(db, id).await.map_err(|e| e.to_string())?;
-
-    Ok(json!(todo))
-}
-
-/// 创建待办
-async fn handle_create_todo(
-    db: &DatabaseConnection,
-    params: Option<Value>,
-    ctx: &ApiContext,
-) -> Result<Value, String> {
-    let title = params.and_then(|p| p.get("title").and_then(|t| t.as_str()).map(String::from));
-
-    let todo = todo::create_todo(db, title)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 统一的变更通知（会自动触发 reschedule）
-    ctx.notify_change("created", Some(todo.id)).await;
-
-    Ok(json!(todo))
-}
-
-/// 更新待办
-async fn handle_update_todo(
-    db: &DatabaseConnection,
-    params: Option<Value>,
-    ctx: &ApiContext,
-) -> Result<Value, String> {
-    let params = params.ok_or("Missing params")?;
-
-    let id = params
-        .get("id")
-        .and_then(|v| v.as_i64())
-        .ok_or("Missing or invalid id")? as i32;
-
-    let title = params
-        .get("title")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-
-    let completed = params.get("completed").and_then(|v| v.as_bool());
-
-    let todo = todo::update_todo(db, id, title, completed)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 统一的变更通知（会自动触发 reschedule）
-    ctx.notify_change("updated", Some(id)).await;
-
-    Ok(json!(todo))
-}
-
-/// 删除待办
-async fn handle_delete_todo(
-    db: &DatabaseConnection,
-    params: Option<Value>,
-    ctx: &ApiContext,
-) -> Result<Value, String> {
-    let params = params.ok_or("Missing params")?;
-
-    let id = params
-        .get("id")
-        .and_then(|v| v.as_i64())
-        .ok_or("Missing or invalid id")? as i32;
-
-    todo::delete_todo(db, id).await.map_err(|e| e.to_string())?;
-
-    // 统一的变更通知（会自动触发 reschedule）
-    ctx.notify_change("deleted", Some(id)).await;
-
-    Ok(json!({"success": true}))
-}
-
-/// 更新待办详情
-async fn handle_update_todo_details(
-    db: &DatabaseConnection,
-    params: Option<Value>,
-    ctx: &ApiContext,
-) -> Result<Value, String> {
-    let params = params.ok_or("Missing params")?;
-
-    let id = params
-        .get("id")
-        .and_then(|v| v.as_i64())
-        .ok_or("Missing or invalid id")? as i32;
-
-    let description = params
-        .get("description")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let priority = params
-        .get("priority")
-        .and_then(|v| v.as_i64())
-        .map(|v| v as i32);
-
-    let location = params
-        .get("location")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let tags = match params.get("tags") {
-        Some(Value::Array(items)) => items
-            .iter()
-            .filter_map(|value| value.as_str().map(|s| s.to_string()))
-            .collect(),
-        Some(Value::String(text)) => text
-            .split(',')
-            .map(|item| item.trim())
-            .filter(|item| !item.is_empty())
-            .map(|item| item.to_string())
-            .collect(),
-        Some(Value::Null) | None => Vec::new(),
-        _ => return Err("Invalid tags format".into()),
-    };
-
-    let start_at = params
-        .get("start_at")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let due_date = match params.get("due_date") {
-        Some(Value::String(text)) => Some(text.clone()),
-        Some(Value::Null) | None => None,
-        _ => return Err("Invalid due_date format".into()),
-    };
-
-    let recurrence_rule = params
-        .get("recurrence_rule")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let reminder_offset_minutes = params
-        .get("reminder_offset_minutes")
-        .and_then(|v| v.as_i64())
-        .map(|v| v as i32);
-
-    let reminder_method = params
-        .get("reminder_method")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let timezone = params
-        .get("timezone")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let todo = todo::update_todo_details(
-        db,
-        id,
-        description,
-        priority,
-        location,
-        tags,
-        start_at,
-        due_date,
-        recurrence_rule,
-        reminder_offset_minutes,
-        reminder_method,
-        timezone,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    ctx.notify_change("updated", Some(id)).await;
-
-    Ok(json!(todo))
-}
-
-/// 唤醒主窗口
-async fn handle_wake_window(ctx: &ApiContext) -> Result<Value, String> {
-    window::show_main_window(ctx.app_handle())
-        .map_err(|e| format!("Failed to wake window: {}", e))?;
-
-    Ok(json!({"success": true}))
-}

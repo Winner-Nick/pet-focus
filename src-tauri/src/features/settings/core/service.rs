@@ -1,9 +1,7 @@
 use anyhow::Result;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 
-use super::entity::Entity as SettingEntity;
-use super::entity;
-use super::entity::Model;
+use crate::features::settings::data::entity::{self, Entity as SettingEntity, Model};
 
 pub struct SettingService;
 

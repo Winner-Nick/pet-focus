@@ -5,8 +5,8 @@ use tauri::{
 };
 
 use crate::AppState;
-use crate::features::settings::service::SettingService;
-use crate::infrastructure::window;
+use crate::features::settings::core::service::SettingService;
+use crate::features::window::manager as window;
 
 const WEBSERVER_STATUS_CHANGED_EVENT: &str = "webserver-status-changed";
 
@@ -79,7 +79,7 @@ impl TrayManager {
                                         .await;
                                         // 更新托盘菜单
                                         let _ = Self::update_tray_menu(&app_handle, true);
-                                        // 通知前端状态变化
+                                        // 通知前端状态变化（直接使用 Tauri Event）
                                         let _ = app_handle.emit(WEBSERVER_STATUS_CHANGED_EVENT, true);
                                     }
                                     Err(e) => {
@@ -105,7 +105,7 @@ impl TrayManager {
                                         .await;
                                         // 更新托盘菜单
                                         let _ = Self::update_tray_menu(&app_handle, false);
-                                        // 通知前端状态变化
+                                        // 通知前端状态变化（直接使用 Tauri Event）
                                         let _ = app_handle.emit(WEBSERVER_STATUS_CHANGED_EVENT, false);
                                     }
                                     Err(e) => {

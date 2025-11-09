@@ -154,7 +154,7 @@ export function TodoDueDatePicker({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[calc(100%-2rem)] overflow-hidden p-0 sm:max-h-[calc(100vh-4rem)] sm:max-w-sm md:max-w-[calc(100%-4rem)]">
           <div className="flex h-full max-h-[calc(100vh-2rem)] flex-col sm:max-h-[calc(100vh-4rem)]">
-            <DialogHeader className="flex-shrink-0 px-6 pt-6">
+            <DialogHeader className="shrink-0 px-6 pt-6">
               <DialogTitle>设置到期时间</DialogTitle>
             </DialogHeader>
             <div className="min-h-0 flex-1 overflow-y-auto px-6">
@@ -202,7 +202,7 @@ export function TodoDueDatePicker({
                 </div>
               </div>
             </div>
-            <div className="flex flex-shrink-0 gap-2 border-t px-6 py-4">
+            <div className="flex shrink-0 gap-2 border-t px-6 py-4">
               <Button variant="outline" className="flex-1" onClick={() => setOpen(false)}>
                 取消
               </Button>

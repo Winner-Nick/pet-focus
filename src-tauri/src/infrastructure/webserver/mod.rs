@@ -1,16 +1,18 @@
 pub mod commands;
+pub mod notifications;
 
 mod channels;
 mod connection;
 mod context;
 mod handler;
 mod manager;
-mod message;
+pub mod message;
 mod registry;
 mod router;
-mod scheduler;
 mod types;
 
+pub use context::ApiContext;
 pub use manager::WebServerManager;
-pub use registry::ApiRegistry;
+pub use message::WsMessage;
+pub use registry::HandlerRegistry;
 pub use types::WebServerStatus;
