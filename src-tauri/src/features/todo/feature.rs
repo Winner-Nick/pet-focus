@@ -74,11 +74,6 @@ impl Feature for TodoFeature {
         super::api::handlers::register_handlers(registry);
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn register_tray_items(&self, _registry: &mut crate::infrastructure::tray::TrayRegistry) {
-        // TODO: 注册托盘菜单项（如"新建待办"）
-    }
-
     async fn initialize(&self, app_state: &AppState) -> Result<()> {
         // 创建到期通知调度器
         let scheduler = Arc::new(DueNotificationScheduler::new(

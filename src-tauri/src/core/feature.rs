@@ -43,12 +43,6 @@ pub trait Feature: Send + Sync {
         // 默认实现：不注册任何 WS Handlers
     }
 
-    /// 注册托盘菜单项（仅桌面平台）
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn register_tray_items(&self, _registry: &mut TrayRegistry) {
-        // 默认实现：不注册任何托盘菜单项
-    }
-
     /// Feature 初始化（在数据库迁移完成后调用）
     /// 
     /// 可以在此处启动后台任务、订阅事件等
