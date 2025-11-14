@@ -19,8 +19,9 @@ function App() {
     
     const unlisten = listen("pomodoro-session-recorded", () => {
       console.log("App: 收到 pomodoro-session-recorded 事件，刷新会话数据");
-      // 使 pomodoro-sessions 查询失效，触发重新获取
-      queryClient.invalidateQueries({ queryKey: ["pomodoro-sessions"] });
+      // 刷新所有 pomodoro 相关的查询
+      queryClient.invalidateQueries({ queryKey: ["pomodoro-sessions"] }); // 旧的
+      queryClient.invalidateQueries({ queryKey: ["pomodoro"] }); // 新的所有查询
     });
 
     return () => {

@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react"
-import { Clock, Trash2 } from "lucide-react"
+import { Clock, Trash2, Edit2, Check, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import {
   Dialog,
   DialogContent,
@@ -11,10 +13,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { usePomodoroSessions } from "@/features/pomodoro/hooks/usePomodoroSessions"
-import { useTodosQuery } from "@/features/todo/api/todo.queries"
-import { deletePomodoroSession } from "@/features/pomodoro/api/pomodoro.api"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import {
+  useSessions,
+  useUpdateSessionNote,
+  useDeleteSessionCascade,
+} from "@/features/pomodoro/hooks"
+import { generateSessionTitle, listSessionRecords } from "@/features/pomodoro/api/session.api"
+import type { PomodoroRecord } from "@/features/pomodoro/api/session.api"
 import { toast } from "sonner"
 
 function formatDuration(seconds: number): string {
@@ -31,31 +36,189 @@ function formatDuration(seconds: number): string {
   }
 }
 
-export function StatsPage() {
-  const queryClient = useQueryClient()
-  const { data: sessions = [] } = usePomodoroSessions()
-  const { data: todos = [] } = useTodosQuery()
+interface SessionItemProps {
+  sessionId: number
+  onDelete: (sessionId: number) => void
+}
+
+function SessionItem({ sessionId, onDelete }: SessionItemProps) {
+  const [title, setTitle] = useState<string>("")
+  const [records, setRecords] = useState<PomodoroRecord[]>([])
+  const [isEditingNote, setIsEditingNote] = useState(false)
+  const [noteValue, setNoteValue] = useState("")
   
-  // 确认对话框状态
+  const updateNoteMutation = useUpdateSessionNote()
+  const { data: sessions = [] } = useSessions(false)
+  
+  const session = sessions.find(s => s.id === sessionId)
+
+  // 加载标题和记录
+  useMemo(() => {
+    if (sessionId > 0) {
+      generateSessionTitle(sessionId).then(setTitle).catch(() => setTitle("加载失败"))
+      listSessionRecords(sessionId).then(setRecords).catch(() => setRecords([]))
+    }
+  }, [sessionId])
+
+  const handleEditNote = () => {
+    setNoteValue(session?.note ?? "")
+    setIsEditingNote(true)
+  }
+
+  const handleSaveNote = () => {
+    if (session) {
+      updateNoteMutation.mutate(
+        { sessionId: session.id, note: noteValue || null },
+        {
+          onSuccess: () => {
+            setIsEditingNote(false)
+            toast.success("备注已更新")
+          },
+        }
+      )
+    }
+  }
+
+  const handleCancelEditNote = () => {
+    setIsEditingNote(false)
+    setNoteValue("")
+  }
+
+  const focusRecords = records.filter(r => r.kind === "focus")
+  const totalSeconds = focusRecords.reduce((acc, r) => acc + r.elapsed_seconds, 0)
+
+  return (
+    <AccordionItem value={`session-${sessionId}`} className="border rounded-lg px-4">
+      <AccordionTrigger className="hover:no-underline py-4">
+        <div className="flex items-center justify-between w-full pr-4">
+          <div className="flex-1 text-left">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{title}</span>
+              {session?.archived && (
+                <Badge variant="secondary" className="text-xs">
+                  已归档
+                </Badge>
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground mt-1">
+              {records.length} 条记录 · {formatDuration(totalSeconds)}
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(sessionId)
+            }}
+          >
+            <Trash2 className="size-4" />
+            <span className="sr-only">删除会话</span>
+          </Button>
+        </div>
+      </AccordionTrigger>
+      <AccordionContent className="pb-4">
+        {/* 备注区域 */}
+        {(session?.note || isEditingNote) && (
+          <div className="mb-4 p-3 rounded-md bg-muted/50">
+            {isEditingNote ? (
+              <div className="space-y-2">
+                <Textarea
+                  value={noteValue}
+                  onChange={(e) => setNoteValue(e.target.value)}
+                  placeholder="添加备注..."
+                  rows={3}
+                  className="resize-none"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNote}
+                    disabled={updateNoteMutation.isPending}
+                  >
+                    <Check className="size-4 mr-1" />
+                    保存
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handleCancelEditNote}>
+                    <X className="size-4 mr-1" />
+                    取消
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm text-muted-foreground flex-1">{session?.note}</p>
+                <Button size="sm" variant="ghost" onClick={handleEditNote} className="h-6 w-6 p-0">
+                  <Edit2 className="size-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+        {!session?.note && !isEditingNote && (
+          <div className="mb-4">
+            <Button size="sm" variant="outline" onClick={handleEditNote} className="w-full">
+              <Edit2 className="size-4 mr-1" />
+              添加备注
+            </Button>
+          </div>
+        )}
+
+        {/* Records 列表 */}
+        <div className="space-y-2">
+          {records.map((record, index) => {
+            const date = new Date(record.start_at)
+            const timeStr = date.toLocaleTimeString("zh-CN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false,
+            })
+
+            const statusMap = {
+              completed: { label: "完成", variant: "default" as const },
+              skipped: { label: "跳过", variant: "secondary" as const },
+              stopped: { label: "停止", variant: "outline" as const },
+            }
+            const statusInfo = statusMap[record.status as keyof typeof statusMap] || {
+              label: record.status,
+              variant: "secondary" as const,
+            }
+
+            return (
+              <div
+                key={record.id}
+                className="flex items-center justify-between p-2 rounded-md border bg-card hover:bg-accent/50 transition"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-4">#{index + 1}</span>
+                  <Badge variant={record.kind === "focus" ? "default" : "secondary"} className="text-xs">
+                    {record.kind === "focus" ? "专注" : "休息"}
+                  </Badge>
+                  <Badge variant={statusInfo.variant} className="text-xs">
+                    {statusInfo.label}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">{timeStr}</span>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {formatDuration(record.elapsed_seconds)}
+                </Badge>
+              </div>
+            )
+          })}
+        </div>
+      </AccordionContent>
+    </AccordionItem>
+  )
+}
+
+export function StatsPage() {
+  const { data: sessions = [] } = useSessions(true) // 显示所有sessions，包括已归档的
+  const deleteSessionMutation = useDeleteSessionCascade()
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [sessionToDelete, setSessionToDelete] = useState<number | null>(null)
-
-  // 删除会话的 mutation
-  const deleteSessionMutation = useMutation({
-    mutationFn: (sessionId: number) => deletePomodoroSession(sessionId),
-    onSuccess: () => {
-      // 刷新会话列表
-      queryClient.invalidateQueries({ queryKey: ["pomodoro-sessions"] })
-      toast.success("已删除专注记录")
-      setDeleteDialogOpen(false)
-      setSessionToDelete(null)
-    },
-    onError: (error) => {
-      toast.error(`删除失败：${error}`)
-      setDeleteDialogOpen(false)
-      setSessionToDelete(null)
-    },
-  })
 
   const handleDeleteClick = (sessionId: number) => {
     setSessionToDelete(sessionId)
@@ -64,7 +227,18 @@ export function StatsPage() {
 
   const handleConfirmDelete = () => {
     if (sessionToDelete !== null) {
-      deleteSessionMutation.mutate(sessionToDelete)
+      deleteSessionMutation.mutate(sessionToDelete, {
+        onSuccess: () => {
+          toast.success("会话已删除")
+          setDeleteDialogOpen(false)
+          setSessionToDelete(null)
+        },
+        onError: (error) => {
+          toast.error(`删除失败：${error}`)
+          setDeleteDialogOpen(false)
+          setSessionToDelete(null)
+        },
+      })
     }
   }
 
@@ -73,41 +247,14 @@ export function StatsPage() {
     setSessionToDelete(null)
   }
 
-  // 只显示专注会话（kind === "focus"），包括所有状态（completed, skipped, stopped）
-  const focusSessions = useMemo(() => {
-    return sessions.filter((s) => s.kind === "focus")
-  }, [sessions])
-
+  // 统计数据 (需要异步加载所有 session 的 records)
   const stats = useMemo(() => {
-    // 统计所有专注会话（包括 completed, skipped, stopped）
-    const totalSeconds = focusSessions.reduce((acc, s) => acc + s.elapsed_seconds, 0)
-    const totalCount = focusSessions.length
-    
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const todaySessions = focusSessions.filter(
-      (s) => new Date(s.start_at) >= todayStart
-    )
-    const todaySeconds = todaySessions.reduce((acc, s) => acc + s.elapsed_seconds, 0)
-
+    // TODO: 这里需要优化，可以添加一个后端 API 直接返回统计数据
     return {
-      totalSeconds,
-      totalCount,
-      todaySeconds,
-      todayCount: todaySessions.length,
+      totalSessions: sessions.length,
+      todaySessions: 0,
     }
-  }, [focusSessions])
-
-  const sortedSessions = useMemo(() => {
-    return [...focusSessions].sort((a, b) =>
-      new Date(b.start_at).getTime() - new Date(a.start_at).getTime()
-    )
-  }, [focusSessions])
-
-  // 创建一个 todo ID 到 title 的映射
-  const todoMap = useMemo(() => {
-    return new Map(todos.map((todo) => [todo.id, todo.title]))
-  }, [todos])
+  }, [sessions])
 
   return (
     <>
@@ -115,102 +262,49 @@ export function StatsPage() {
         {/* 今日统计 */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">今日专注时间</CardTitle>
+            <CardTitle className="text-sm font-medium">今日会话</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatDuration(stats.todaySeconds)}</div>
-            <p className="text-xs text-muted-foreground mt-1">{stats.todayCount} 个任务</p>
+            <div className="text-3xl font-bold">{stats.todaySessions}</div>
+            <p className="text-xs text-muted-foreground mt-1">个会话</p>
           </CardContent>
         </Card>
 
         {/* 总体统计 */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">总专注时间</CardTitle>
+            <CardTitle className="text-sm font-medium">总会话数</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatDuration(stats.totalSeconds)}</div>
-            <p className="text-xs text-muted-foreground mt-1">{stats.totalCount} 个任务</p>
+            <div className="text-3xl font-bold">{stats.totalSessions}</div>
+            <p className="text-xs text-muted-foreground mt-1">个会话</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* 完成的任务列表 */}
+      {/* Sessions 列表 */}
       <Card>
         <CardHeader>
-          <CardTitle>完成的任务</CardTitle>
+          <CardTitle>专注会话</CardTitle>
           <CardDescription>所有已记录的专注会话</CardDescription>
         </CardHeader>
         <CardContent>
-          {sortedSessions.length === 0 ? (
+          {sessions.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-12 text-center text-muted-foreground">
               <Clock className="size-8" aria-hidden="true" />
-              <div className="text-base font-medium">暂无完成的任务</div>
-              <p className="max-w-sm text-sm">从待办事项中选择任务开始专注计时</p>
+              <div className="text-base font-medium">暂无会话记录</div>
+              <p className="max-w-sm text-sm">开始你的第一个专注会话吧</p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {sortedSessions.map((session) => {
-                const date = new Date(session.start_at)
-                const dateStr = date.toLocaleDateString("zh-CN", {
-                  month: "2-digit",
-                  day: "2-digit",
-                })
-                const timeStr = date.toLocaleTimeString("zh-CN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: false,
-                })
-
-                // 获取关联的 todo 标题
-                const todoTitle = session.related_todo_id
-                  ? todoMap.get(session.related_todo_id) || "未关联待办"
-                  : "未关联待办"
-
-                // 状态标签映射
-                const statusMap = {
-                  completed: { label: "完成", variant: "default" as const },
-                  skipped: { label: "跳过", variant: "secondary" as const },
-                  stopped: { label: "停止", variant: "outline" as const },
-                }
-                const statusInfo = statusMap[session.status] || { label: session.status, variant: "secondary" as const }
-
-                return (
-                  <div
-                    key={session.id}
-                    className="flex items-start justify-between gap-3 rounded-lg border border-border p-3 hover:bg-accent/50 transition"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium truncate text-sm">{todoTitle}</p>
-                        <Badge variant={statusInfo.variant} className="shrink-0 text-xs">
-                          {statusInfo.label}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {dateStr} {timeStr}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="secondary" className="whitespace-nowrap">
-                        <Clock className="size-3 mr-1" />
-                        {formatDuration(session.elapsed_seconds)}
-                      </Badge>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeleteClick(session.id)}
-                        disabled={deleteSessionMutation.isPending}
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="sr-only">删除</span>
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <Accordion type="multiple" className="space-y-2">
+              {sessions.map((session) => (
+                <SessionItem
+                  key={session.id}
+                  sessionId={session.id}
+                  onDelete={handleDeleteClick}
+                />
+              ))}
+            </Accordion>
           )}
         </CardContent>
       </Card>
@@ -221,7 +315,7 @@ export function StatsPage() {
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
             <DialogDescription>
-              确定要删除这条专注记录吗？此操作无法撤销。
+              确定要删除这个会话及其所有记录吗？此操作无法撤销。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
