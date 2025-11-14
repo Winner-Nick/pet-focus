@@ -295,7 +295,21 @@ async fn persist_finished_phase(state_ptr: &Arc<Mutex<State>>, app: &AppHandle<W
 
     if let Some(state) = app.try_state::<crate::core::AppState>() {
         let db = state.db().clone();
-        pomo_service::record_session(&db, kind, PomodoroSessionStatus::Completed, round, start_at, end_at, None).await?;
+        
+        // 获取或创建活动 session（自动创建时不带备注）
+        let active_session = pomo_service::get_or_create_active_session(&db, None).await?;
+        
+        // 创建 record 并关联到 session
+        pomo_service::create_record_with_session(
+            &db, 
+            active_session.id, 
+            kind, 
+            PomodoroSessionStatus::Completed, 
+            round, 
+            start_at, 
+            end_at, 
+            None
+        ).await?;
         
         // 发送会话记录更新事件
         println!("发送会话记录事件: {}", POMODORO_SESSION_RECORDED_EVENT);
@@ -316,7 +330,21 @@ async fn persist_with_status(state_ptr: &Arc<Mutex<State>>, app: &AppHandle<Wry>
     let kind = match mode { PomodoroMode::Focus => PomodoroSessionKind::Focus, _ => PomodoroSessionKind::Rest };
     if let Some(state) = app.try_state::<crate::core::AppState>() {
         let db = state.db().clone();
-        pomo_service::record_session(&db, kind, status, round, start_at, end_at, None).await?;
+        
+        // 获取或创建活动 session（自动创建时不带备注）
+        let active_session = pomo_service::get_or_create_active_session(&db, None).await?;
+        
+        // 创建 record 并关联到 session
+        pomo_service::create_record_with_session(
+            &db, 
+            active_session.id, 
+            kind, 
+            status, 
+            round, 
+            start_at, 
+            end_at, 
+            None
+        ).await?;
         
         // 发送会话记录更新事件
         println!("发送会话记录事件: {}", POMODORO_SESSION_RECORDED_EVENT);
