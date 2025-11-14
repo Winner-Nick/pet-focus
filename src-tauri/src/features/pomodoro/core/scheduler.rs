@@ -15,6 +15,7 @@ use super::models::{PomodoroConfig, PomodoroMode, PomodoroStatus};
 
 pub const POMODORO_STATUS_EVENT: &str = "pomodoro-status";
 pub const POMODORO_TICK_EVENT: &str = "pomodoro-tick";
+pub const POMODORO_SESSION_RECORDED_EVENT: &str = "pomodoro-session-recorded";
 pub const WS_EVENT_STATUS: &str = "pomodoro.status";
 pub const WS_EVENT_TICK: &str = "pomodoro.tick";
 
@@ -26,6 +27,7 @@ struct State {
     remaining_seconds: u32,
     round: u32,
     phase_started_at: Option<chrono::DateTime<chrono::Utc>>,
+    generation: u64, // 用于标记 tick 任务的版本，每次启动时递增
 }
 
 pub struct PomodoroManager {
@@ -47,6 +49,7 @@ impl PomodoroManager {
                 remaining_seconds: 0,
                 round: 0,
                 phase_started_at: None,
+                generation: 0,
             })),
             tick_task: Mutex::new(None),
         }
@@ -61,6 +64,7 @@ impl PomodoroManager {
             s.remaining_seconds = cfg.focus_minutes * 60;
             s.round = s.round.max(0);
             s.phase_started_at = Some(Utc::now());
+            s.generation = s.generation.wrapping_add(1); // 递增 generation 以终止旧任务
         }
 
         self.spawn_tick_loop(cfg).await;
@@ -101,6 +105,7 @@ impl PomodoroManager {
             s.mode = PomodoroMode::Idle;
             s.remaining_seconds = 0;
             s.round = s.round;
+            s.generation = s.generation.wrapping_add(1); // 递增 generation 以终止旧任务
         }
         // 持久化当前阶段为 stopped（如果有进行中的阶段）
         if let Err(e) = persist_with_status(&self.state, &self.app, PomodoroSessionStatus::Stopped).await {
@@ -128,6 +133,12 @@ impl PomodoroManager {
         let notifier = self.notifier.clone();
         let state_ptr = Arc::clone(&self.state);
 
+        // 记录当前 generation，用于检测任务是否已过期
+        let current_generation = {
+            let s = state_ptr.lock().await;
+            s.generation
+        };
+
         let handle = tauri::async_runtime::spawn(async move {
             loop {
                 sleep(Duration::from_secs(1)).await;
@@ -137,6 +148,10 @@ impl PomodoroManager {
 
                 {
                     let mut s = state_ptr.lock().await;
+                    // 检查 generation 是否匹配，不匹配说明有新任务启动，当前任务应该退出
+                    if s.generation != current_generation {
+                        break;
+                    }
                     if !s.running { break; }
                     if s.paused {
                         // 仅广播 tick，不减少时间
@@ -281,6 +296,10 @@ async fn persist_finished_phase(state_ptr: &Arc<Mutex<State>>, app: &AppHandle<W
     if let Some(state) = app.try_state::<crate::core::AppState>() {
         let db = state.db().clone();
         pomo_service::record_session(&db, kind, PomodoroSessionStatus::Completed, round, start_at, end_at, None).await?;
+        
+        // 发送会话记录更新事件
+        println!("发送会话记录事件: {}", POMODORO_SESSION_RECORDED_EVENT);
+        let _ = app.emit(POMODORO_SESSION_RECORDED_EVENT, ());
     }
     Ok(())
 }
@@ -298,6 +317,10 @@ async fn persist_with_status(state_ptr: &Arc<Mutex<State>>, app: &AppHandle<Wry>
     if let Some(state) = app.try_state::<crate::core::AppState>() {
         let db = state.db().clone();
         pomo_service::record_session(&db, kind, status, round, start_at, end_at, None).await?;
+        
+        // 发送会话记录更新事件
+        println!("发送会话记录事件: {}", POMODORO_SESSION_RECORDED_EVENT);
+        let _ = app.emit(POMODORO_SESSION_RECORDED_EVENT, ());
     }
     Ok(())
 }

@@ -124,3 +124,11 @@ pub async fn pomodoro_stats(
         .with_timezone(&chrono::Utc);
     service::get_stats_range(state.db(), from, to).await.map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn pomodoro_delete_session(
+    state: State<'_, AppState>,
+    session_id: i32,
+) -> Result<(), String> {
+    service::delete_session(state.db(), session_id).await.map_err(|e| e.to_string())
+}

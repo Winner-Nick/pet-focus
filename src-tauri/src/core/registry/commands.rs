@@ -34,6 +34,7 @@ pub fn get_handler() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync + 'sta
         crate::features::pomodoro::api::commands::pomodoro_get_config,
         crate::features::pomodoro::api::commands::pomodoro_set_config,
         crate::features::pomodoro::api::commands::pomodoro_list_sessions,
+        crate::features::pomodoro::api::commands::pomodoro_delete_session,
         crate::features::pomodoro::api::commands::pomodoro_stats,
         
         // WebServer Commands (Desktop only)

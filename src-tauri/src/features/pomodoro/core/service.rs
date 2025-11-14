@@ -105,3 +105,10 @@ pub async fn list_recent_sessions(db: &DatabaseConnection, limit: u64) -> Result
         .await?;
     Ok(items)
 }
+
+pub async fn delete_session(db: &DatabaseConnection, session_id: i32) -> Result<()> {
+    session_entity::Entity::delete_by_id(session_id)
+        .exec(db)
+        .await?;
+    Ok(())
+}
