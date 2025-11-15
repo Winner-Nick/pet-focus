@@ -19,13 +19,13 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::pomodoro_session_records::Entity")]
-    SessionRecords,
+    #[sea_orm(has_many = "super::pomodoro_records::Entity")]
+    Records,
 }
 
-impl Related<super::pomodoro_session_records::Entity> for Entity {
+impl Related<super::pomodoro_records::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SessionRecords.def()
+        Relation::Records.def()
     }
 }
 

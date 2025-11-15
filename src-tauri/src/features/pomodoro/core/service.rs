@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sea_orm::DatabaseConnection;
+use serde::{Deserialize, Serialize};
 
 use crate::features::settings::core::service::SettingService;
 
@@ -7,9 +8,8 @@ use super::models::{PomodoroConfig, PomodoroSessionKind, PomodoroSessionStatus};
 use crate::features::pomodoro::data::entities::{
     pomodoro_sessions as session_entity,
     pomodoro_records as record_entity,
-    pomodoro_session_records as join_entity,
 };
-use sea_orm::{ActiveModelTrait, ActiveValue::{Set, NotSet}, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, QueryOrder, PaginatorTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue::{Set, NotSet}, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, PaginatorTrait};
 use chrono::{DateTime, Utc};
 
 const KEY_FOCUS: &str = "pomodoro.focus_minutes";
@@ -43,41 +43,18 @@ pub async fn set_config(db: &DatabaseConnection, cfg: PomodoroConfig) -> Result<
     Ok(())
 }
 
-pub async fn record_session(
-    db: &DatabaseConnection,
-    kind: PomodoroSessionKind,
-    status: PomodoroSessionStatus,
-    round: u32,
-    start_at: DateTime<Utc>,
-    end_at: DateTime<Utc>,
-    related_todo_id: Option<i32>,
-) -> Result<record_entity::Model> {
-    let elapsed = (end_at - start_at).num_seconds().max(0) as i32;
-    let now = Utc::now();
-    let active = record_entity::ActiveModel {
-        id: NotSet,
-        kind: Set(match kind { PomodoroSessionKind::Focus => "focus".into(), PomodoroSessionKind::Rest => "rest".into() }),
-        status: Set(match status { PomodoroSessionStatus::Completed => "completed".into(), PomodoroSessionStatus::Stopped => "stopped".into(), PomodoroSessionStatus::Skipped => "skipped".into() }),
-        round: Set(round as i32),
-        start_at: Set(start_at),
-        end_at: Set(end_at),
-        elapsed_seconds: Set(elapsed),
-        related_todo_id: Set(related_todo_id),
-        created_at: Set(now),
-        updated_at: Set(now),
-    };
-    Ok(active.insert(db).await?)
-}
+// ==================== Record Operations (兼容性接口) ====================
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PomodoroStats {
     pub total_focus_seconds: i64,
     pub session_count: i64,
 }
 
+/// 获取指定时间范围内的统计数据
 pub async fn get_stats_range(db: &DatabaseConnection, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<PomodoroStats> {
-    // total focus seconds（在应用端求和，避免聚合别名兼容性问题）
+    // 查询所有专注时间的秒数
     let rows: Vec<i32> = record_entity::Entity::find()
         .filter(record_entity::Column::Kind.eq("focus"))
         .filter(record_entity::Column::Status.eq("completed"))
@@ -90,17 +67,20 @@ pub async fn get_stats_range(db: &DatabaseConnection, from: DateTime<Utc>, to: D
         .await?;
     let total_focus: i64 = rows.into_iter().map(|v| v as i64).sum();
 
+    // 计数专注记录
     let session_count: i64 = record_entity::Entity::find()
         .filter(record_entity::Column::Kind.eq("focus"))
         .filter(record_entity::Column::Status.eq("completed"))
         .filter(record_entity::Column::StartAt.gte(from))
         .filter(record_entity::Column::EndAt.lte(to))
         .count(db)
-        .await? as i64;
+        .await
+        .map(|c| c as i64)?;
 
     Ok(PomodoroStats { total_focus_seconds: total_focus, session_count })
 }
 
+/// 列出最近的 records（按时间倒序）
 pub async fn list_recent_records(db: &DatabaseConnection, limit: u64) -> Result<Vec<record_entity::Model>> {
     let items = record_entity::Entity::find()
         .order_by_desc(record_entity::Column::StartAt)
@@ -110,6 +90,7 @@ pub async fn list_recent_records(db: &DatabaseConnection, limit: u64) -> Result<
     Ok(items)
 }
 
+/// 删除单个 record
 pub async fn delete_record(db: &DatabaseConnection, record_id: i32) -> Result<()> {
     record_entity::Entity::delete_by_id(record_id)
         .exec(db)
@@ -138,7 +119,7 @@ pub async fn get_session_by_id(db: &DatabaseConnection, session_id: i32) -> Resu
     Ok(session_entity::Entity::find_by_id(session_id).one(db).await?)
 }
 
-/// 获取所有 Sessions（包含关联的 records）
+/// 获取所有 Sessions
 pub async fn list_sessions(db: &DatabaseConnection, include_archived: bool) -> Result<Vec<session_entity::Model>> {
     let mut query = session_entity::Entity::find().order_by_desc(session_entity::Column::CreatedAt);
     
@@ -178,33 +159,12 @@ pub async fn archive_session(db: &DatabaseConnection, session_id: i32) -> Result
     Ok(active.update(db).await?)
 }
 
-/// 删除 Session（级联删除关联的 records）
-/// 
-/// 外键约束只能处理：session -> session_records 的级联删除
-/// 但无法自动删除 records，因为外键方向是 session_records -> records
-/// 所以需要手动删除 records
+/// 删除 Session（通过数据库外键约束自动级联删除关联的 records）
 pub async fn delete_session_cascade(db: &DatabaseConnection, session_id: i32) -> Result<()> {
-    // 1. 查找所有关联的 record_ids
-    let join_records = join_entity::Entity::find()
-        .filter(join_entity::Column::SessionId.eq(session_id))
-        .all(db)
-        .await?;
-    
-    let record_ids: Vec<i32> = join_records.iter().map(|jr| jr.record_id).collect();
-    
-    // 2. 删除 session（会自动级联删除 session_records 关联表）
+    // 由于外键约束设置了 ON DELETE CASCADE，删除 session 时会自动删除所有关联的 records
     session_entity::Entity::delete_by_id(session_id)
         .exec(db)
         .await?;
-    
-    // 3. 手动删除 records（外键约束无法自动处理这个方向的删除）
-    if !record_ids.is_empty() {
-        record_entity::Entity::delete_many()
-            .filter(record_entity::Column::Id.is_in(record_ids))
-            .exec(db)
-            .await?;
-    }
-    
     Ok(())
 }
 
@@ -225,7 +185,6 @@ pub async fn get_active_session(db: &DatabaseConnection) -> Result<Option<sessio
 /// # 参数
 /// - `pending_note`: 如果需要创建新 session，使用此备注
 pub async fn get_or_create_active_session(db: &DatabaseConnection, pending_note: Option<String>) -> Result<session_entity::Model> {
-    // 查找最新的未归档 session
     let active = get_active_session(db).await?;
     
     match active {
@@ -234,31 +193,13 @@ pub async fn get_or_create_active_session(db: &DatabaseConnection, pending_note:
     }
 }
 
-/// 获取 Session 的所有 Records（按顺序）
+/// 获取 Session 的所有 Records（按创建时间排序）
 pub async fn list_session_records(db: &DatabaseConnection, session_id: i32) -> Result<Vec<record_entity::Model>> {
-    // 查找所有关联到该 session 的 join 记录
-    let join_records = join_entity::Entity::find()
-        .filter(join_entity::Column::SessionId.eq(session_id))
-        .order_by_asc(join_entity::Column::Sequence)
+    let records = record_entity::Entity::find()
+        .filter(record_entity::Column::SessionId.eq(session_id))
+        .order_by_asc(record_entity::Column::CreatedAt)
         .all(db)
         .await?;
-    
-    // 获取所有 record_id
-    let record_ids: Vec<i32> = join_records.iter().map(|jr| jr.record_id).collect();
-    
-    // 查找所有 records
-    let mut records = record_entity::Entity::find()
-        .filter(record_entity::Column::Id.is_in(record_ids.clone()))
-        .all(db)
-        .await?;
-    
-    // 按照 sequence 顺序排序
-    records.sort_by_key(|r| {
-        join_records.iter()
-            .find(|jr| jr.record_id == r.id)
-            .map(|jr| jr.sequence)
-            .unwrap_or(0)
-    });
     
     Ok(records)
 }
@@ -274,38 +215,35 @@ pub async fn create_record_with_session(
     end_at: DateTime<Utc>,
     related_todo_id: Option<i32>,
 ) -> Result<record_entity::Model> {
-    // 1. 创建 record
-    let record = record_session(db, kind, status, round, start_at, end_at, related_todo_id).await?;
-    
-    // 2. 获取当前 session 的最大 sequence
-    let max_seq: Option<i32> = join_entity::Entity::find()
-        .filter(join_entity::Column::SessionId.eq(session_id))
-        .select_only()
-        .column(join_entity::Column::Sequence)
-        .order_by_desc(join_entity::Column::Sequence)
-        .into_tuple()
-        .one(db)
-        .await?;
-    
-    let next_seq = max_seq.map(|s| s + 1).unwrap_or(1);
-    
-    // 3. 创建关联记录
+    let elapsed = (end_at - start_at).num_seconds().max(0) as i32;
     let now = Utc::now();
-    let join_active = join_entity::ActiveModel {
+    
+    let active = record_entity::ActiveModel {
         id: NotSet,
         session_id: Set(session_id),
-        record_id: Set(record.id),
-        sequence: Set(next_seq),
+        kind: Set(match kind { 
+            PomodoroSessionKind::Focus => "focus".into(), 
+            PomodoroSessionKind::Rest => "rest".into() 
+        }),
+        status: Set(match status { 
+            PomodoroSessionStatus::Completed => "completed".into(), 
+            PomodoroSessionStatus::Stopped => "stopped".into(), 
+            PomodoroSessionStatus::Skipped => "skipped".into() 
+        }),
+        round: Set(round as i32),
+        start_at: Set(start_at),
+        end_at: Set(end_at),
+        elapsed_seconds: Set(elapsed),
+        related_todo_id: Set(related_todo_id),
         created_at: Set(now),
+        updated_at: Set(now),
     };
-    join_active.insert(db).await?;
     
-    Ok(record)
+    Ok(active.insert(db).await?)
 }
 
 /// 生成 Session 动态标题
 /// 格式: "年月日时分～时分" (同一天) 或 "年月日时分～年月日时分" (跨天)
-/// 未完成的 session 只显示开始时间
 pub async fn generate_session_title(db: &DatabaseConnection, session_id: i32) -> Result<String> {
     let records = list_session_records(db, session_id).await?;
     
@@ -316,7 +254,6 @@ pub async fn generate_session_title(db: &DatabaseConnection, session_id: i32) ->
     let first_start = records.first().unwrap().start_at;
     let last_end = records.last().unwrap().end_at;
     
-    // 使用 chrono 格式化（后续可替换为 date-fns）
     let start_str = first_start.format("%Y-%m-%d %H:%M").to_string();
     
     // 检查是否是同一天

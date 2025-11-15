@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
+    /// 所属的 session ID
+    pub session_id: i32,
     /// focus | rest
     pub kind: String,
     /// completed | stopped | skipped
@@ -23,13 +25,18 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::pomodoro_session_records::Entity")]
-    SessionRecords,
+    #[sea_orm(
+        belongs_to = "super::pomodoro_sessions::Entity",
+        from = "Column::SessionId",
+        to = "super::pomodoro_sessions::Column::Id",
+        on_delete = "Cascade"
+    )]
+    Session,
 }
 
-impl Related<super::pomodoro_session_records::Entity> for Entity {
+impl Related<super::pomodoro_sessions::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SessionRecords.def()
+        Relation::Session.def()
     }
 }
 
