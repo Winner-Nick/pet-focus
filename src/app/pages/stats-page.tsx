@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState, useMemo } from "react"
 import { Clock, Trash2, Edit2, Check, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +20,7 @@ import {
 } from "@/features/pomodoro/hooks"
 import { generateSessionTitle, listSessionRecords } from "@/features/pomodoro/api/session.api"
 import type { PomodoroRecord } from "@/features/pomodoro/api/session.api"
+import { ContributionWall, StatsOverview } from "@/features/stats"
 import { toast } from "sonner"
 
 function formatDuration(seconds: number): string {
@@ -247,40 +248,13 @@ export function StatsPage() {
     setSessionToDelete(null)
   }
 
-  // 统计数据 (需要异步加载所有 session 的 records)
-  const stats = useMemo(() => {
-    // TODO: 这里需要优化，可以添加一个后端 API 直接返回统计数据
-    return {
-      totalSessions: sessions.length,
-      todaySessions: 0,
-    }
-  }, [sessions])
-
   return (
-    <>
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* 今日统计 */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">今日会话</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stats.todaySessions}</div>
-            <p className="text-xs text-muted-foreground mt-1">个会话</p>
-          </CardContent>
-        </Card>
+    <div className="space-y-6">
+      {/* 统计概览 */}
+      <StatsOverview />
 
-        {/* 总体统计 */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">总会话数</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stats.totalSessions}</div>
-            <p className="text-xs text-muted-foreground mt-1">个会话</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* 月度贡献墙 */}
+      <ContributionWall />
 
       {/* Sessions 列表 */}
       <Card>
@@ -336,6 +310,6 @@ export function StatsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   )
 }
