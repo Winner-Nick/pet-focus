@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react"
-import type { ColorTheme, ThemeColors } from "../lib/color-themes"
+import type { ColorTheme, ThemeStyles } from "../lib/color-themes"
 import {
   COLOR_THEMES,
   DEFAULT_COLOR_THEME_ID,
@@ -17,9 +17,7 @@ export const ColorThemeContext = createContext<ColorThemeContextValue | null>(nu
 
 export function useColorTheme(): ColorThemeContextValue {
   const ctx = useContext(ColorThemeContext)
-  if (!ctx) {
-    throw new Error("useColorTheme must be used within ColorThemeProvider")
-  }
+  if (!ctx) throw new Error("useColorTheme must be used within ColorThemeProvider")
   return ctx
 }
 
@@ -27,9 +25,7 @@ export function useColorTheme(): ColorThemeContextValue {
 export function getSavedColorThemeId(): string {
   try {
     const saved = localStorage.getItem(COLOR_THEME_STORAGE_KEY)
-    if (saved && getColorThemeById(saved)) {
-      return saved
-    }
+    if (saved && getColorThemeById(saved)) return saved
   } catch {
     // localStorage not available
   }
@@ -46,7 +42,8 @@ export function saveColorThemeId(id: string): void {
 }
 
 // CSS variable name mapping
-const CSS_VAR_MAP: Record<keyof ThemeColors, string> = {
+const CSS_VAR_MAP: Record<keyof ThemeStyles, string> = {
+  // Colors
   background: "--background",
   foreground: "--foreground",
   card: "--card",
@@ -79,25 +76,34 @@ const CSS_VAR_MAP: Record<keyof ThemeColors, string> = {
   sidebarAccentForeground: "--sidebar-accent-foreground",
   sidebarBorder: "--sidebar-border",
   sidebarRing: "--sidebar-ring",
+  // Typography
+  fontSans: "--font-sans",
+  fontSerif: "--font-serif",
+  fontMono: "--font-mono",
+  // Layout
+  radius: "--radius",
+  spacing: "--spacing",
+  letterSpacing: "--letter-spacing",
+  // Shadows
+  shadowColor: "--shadow-color",
+  shadowOpacity: "--shadow-opacity",
+  shadowBlur: "--shadow-blur",
+  shadowSpread: "--shadow-spread",
+  shadowOffsetX: "--shadow-offset-x",
+  shadowOffsetY: "--shadow-offset-y",
 }
 
-// Apply theme colors to CSS variables
-export function applyThemeColors(colors: ThemeColors, target: HTMLElement = document.documentElement): void {
+// Apply theme styles to CSS variables
+export function applyThemeStyles(styles: ThemeStyles, target: HTMLElement = document.documentElement): void {
   for (const [key, cssVar] of Object.entries(CSS_VAR_MAP)) {
-    const value = colors[key as keyof ThemeColors]
+    const value = styles[key as keyof ThemeStyles]
     target.style.setProperty(cssVar, value)
   }
 }
 
-// Apply color theme based on current mode (light/dark)
+// Apply color theme based on current mode
 export function applyColorTheme(theme: ColorTheme, isDark: boolean): void {
-  const colors = isDark ? theme.dark : theme.light
-  applyThemeColors(colors)
-}
-
-// Check if current mode is dark
-export function isDarkMode(): boolean {
-  return document.documentElement.classList.contains("dark")
+  applyThemeStyles(isDark ? theme.dark : theme.light)
 }
 
 export { COLOR_THEMES, DEFAULT_COLOR_THEME_ID, getColorThemeById }
